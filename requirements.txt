@@ -1,7 +1,6 @@
 PyNaCl
 googletrans
 pillow
-Image
 discord.py
 matplotlib
 pymongo
