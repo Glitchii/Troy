@@ -1,5 +1,4 @@
 PyNaCl
-asyncio
 googletrans
 pillow
 Image

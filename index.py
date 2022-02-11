@@ -1,18 +1,25 @@
 #!/usr/bin/python
+from traceback import format_exc
 from datetime import datetime
+from io import StringIO as IoStringIO, BytesIO as IoBytesIO
+from re import match as re_match, sub as re_sub, search as re_search, findall as re_findall, compile as re_compile
+from random import choice as randchoice
+from asyncio import TimeoutError as AsyncioTimeoutError
+# from difflib import get_close_matches
+
 from discord import Activity, ActivityType, Embed, File, Forbidden, Status
 from discord.errors import HTTPException
 from discord.ext.commands.errors import NoPrivateMessage, BadArgument, MissingRequiredArgument
 from discord.ext.commands import CommandError, CommandNotFound, BotMissingPermissions, MissingPermissions, DisabledCommand
 from discord.utils import get, escape_mentions
-from io import StringIO as IoStringIO, BytesIO as IoBytesIO
-from re import match as re_match, sub as re_sub, search as re_search, findall as re_findall, compile as re_compile
-from random import choice as randchoice
-from asyncio import TimeoutError as AsyncioTimeoutError
 
-# from difflib import get_close_matches
-from traceback import format_exc
-from imports import custom_cmd_helper, fson, svCmds, bot, botPrefixDB, colrs, Cmds, access_ids, tkn, send_me, get_fun_fact, lineNum, guildPrefix, loading_msg, greetings, tryInt, customCmdsDB, custom_cmd_format, modLogsDB, aiohttp_request, join_leave_formatters, successful, ExitRequest
+from imports import (
+    custom_cmd_helper, fson, svCmds, bot, botPrefixDB, colrs,
+    Cmds, access_ids, tkn, send_me, get_fun_fact, lineNum,
+    guildPrefix, loading_msg, greetings, tryInt, customCmdsDB,
+    custom_cmd_format, modLogsDB, aiohttp_request, join_leave_formatters,
+    successful, ExitRequest
+)
 
 bot.remove_command('help')
 bot_ping = None
@@ -34,16 +41,11 @@ async def custom_cmd_output(msg, prefix, guildFinder):
                 if guildFinder[cmd].get('attachment'):
                     loading, link = await msg.channel.send(loading_msg()), guildFinder[cmd]['attachment']
                     response = guildFinder[cmd]['response']
-                    if type(response) == list:
-                        await msg.channel.send(custom_cmd_format(msg, randchoice(response)), file=File(IoBytesIO(await aiohttp_request(str(link), 'read')), filename=f"Image.{link.split('/')[-1].split('.')[1]}"))
-                    else:
-                        await msg.channel.send(custom_cmd_format(msg, response), file=File(IoBytesIO(await aiohttp_request(str(link), 'read')), filename=f"Image.{link.split('/')[-1].split('.')[1]}"))
+                    await msg.channel.send(custom_cmd_format(msg, randchoice(response) if type(response) == list else response),
+                        file=File(IoBytesIO(await aiohttp_request(str(link), 'read')), filename=f"Image.{link.split('/')[-1].split('.')[1]}"))
                 else:
                     response = guildFinder[cmd]['response']
-                    if type(response) == list:
-                        await msg.channel.send(custom_cmd_format(msg, randchoice(response)))
-                    else:
-                        await msg.channel.send(custom_cmd_format(msg, response))
+                    await msg.channel.send(custom_cmd_format(msg, randchoice(response) if type(response) == list else response))
     except: print(format_exc())
     finally:
         try: await loading.delete()
@@ -53,7 +55,7 @@ async def custom_cmd_output(msg, prefix, guildFinder):
 @bot.listen()
 async def on_message(msg):
     try:
-        if not msg.author.bot and msg.guild:
+        if msg.guild and not msg.author.bot:
             if bot_ping.match(msg.content):
                 try:
                     async with msg.channel.typing():
@@ -77,7 +79,8 @@ async def on_message(msg):
         pass
     except:
         print(format_exc())
-    # finally: await bot.process_commands(msg)
+    # finally:
+    #     await bot.process_commands(msg)
 
 
 @bot.listen()
@@ -115,19 +118,13 @@ async def on_command_error(ctx, error):
         return await ctx.channel.send("Error: This command requires the `Embed Links` permission to execute")
     elif isinstance(error, BotMissingPermissions):
         missing = [perm.replace('_', ' ').replace('guild', 'server').title() for perm in error.missing_perms]
-        if len(missing) > 2:
-            fmt = '{}, and {}'.format("**, **".join(missing[:-1]), missing[-1])
-        else:
-            fmt = ' and '.join(missing)
+        fmt = f'{"**, **".join(missing[:-1])}, and {missing[-1]}' if len(missing) > 2 else ' and '.join(missing)
         return await ctx.send(f'I need the `{fmt}` permission(s) to run this command.')
     elif isinstance(error, DisabledCommand):
         return await ctx.send('This command has been disabled.')
     elif isinstance(error, MissingPermissions):
         missing = [perm.replace('_', ' ').replace('guild', 'server').title() for perm in error.missing_perms]
-        if len(missing) > 2:
-            fmt = '{}, and {}'.format("**, **".join(missing[:-1]), missing[-1])
-        else:
-            fmt = ' and '.join(missing)
+        fmt = f'{"**, **".join(missing[:-1])}, and {missing[-1]}' if len(missing) > 2 else ' and '.join(missing)
         return await ctx.send(f'I need the `{fmt}` permission(s) to run this command.')
     elif isinstance(error, NoPrivateMessage):
         return await ctx.author.send('This command cannot be used in direct messages.')
@@ -141,7 +138,8 @@ async def on_guild_join(guild):
 @bot.event
 async def on_guild_remove(guild):
     try:
-        [database.find_one_and_delete({str(guild.id): {'$exists': True}}) for database in [botPrefixDB, customCmdsDB, modLogsDB]]
+        for database in (botPrefixDB, customCmdsDB, modLogsDB):
+            database.find_one_and_delete({str(guild.id): {'$exists': True}})
     except:
         print(f"Error deleting guild prefix from Database in the guild: {guild}\nGuild id: {guild.id}\nError: \n```py\n{format_exc()}\n```")
     await send_me().send(embed=Embed(color=colrs[3], title=f"<:Left:663400555493851182> Troy removed from '{guild}'", timestamp=datetime.utcnow()).add_field(name="<:ID:663403744314261504> Guild ID", value=guild.id, inline=True).add_field(name="<:Mod_admin:663199332299964458> Owner", value=guild.owner, inline=True).add_field(name="<:IDcard:663295056911925281> Owner ID", value=guild.owner.id, inline=True).add_field(name="<:Users:663295067280244776> Members", value=f"{guild.member_count} | Humans: {sum(not x.bot for x in guild.members)}, Bots: {sum(x.bot for x in guild.members)}", inline=True).set_thumbnail(url=guild.icon_url))
@@ -158,14 +156,11 @@ async def restart(ctx):
 @bot.command(aliases=('safe?',))
 async def safe(ctx):
     if bot.voice_clients:
-        return await ctx.send(
-            f"""Not safe to restart... Bot is in some voice channels:\n```json\n{fson([{
-        f'{x.guild.name} ({x.guild.id})': {
-            "Channel": f'{x.channel.name} ({x.channel.id})',
-            "Playing": x.is_playing() and 'Yes' or 'No'
-        }
-    } for x in bot.voice_clients][0])}\n```"""
-        )
+        return await ctx.send(f"""Not safe to restart... Bot is in some voice channels:\n```json\n{fson([{
+            f'{x.guild.name} ({x.guild.id})': {
+                "Channel": f'{x.channel.name} ({x.channel.id})',
+                "Playing": x.is_playing() and 'Yes' or 'No'
+            }} for x in bot.voice_clients][0])}\n```""")
     await ctx.message.add_reaction(bot.get_emoji(663230689860386846))
 
 
@@ -311,7 +306,9 @@ async def h(ctx, *, command_name=None):
                                                 try:
                                                     await send.clear_reactions()
                                                 except:
-                                                    [await rem_reaction(reaction, ctx.guild.me) for reaction in reaction.message.reactions if reaction.message.author == ctx.guild.me]
+                                                    for reaction in reaction.message.reactions:
+                                                        if reaction.message.author == ctx.guild.me:
+                                                            await rem_reaction(reaction, ctx.guild.me)
                                                 for emoj in to_react_with_main:
                                                     await send.add_reaction(emoji=emoj)
                                                 await mainFunc()
@@ -363,6 +360,7 @@ async def h(ctx, *, command_name=None):
                                                             for emoj in to_react_with_main:
                                                                 await send.add_reaction(emoji=emoj)
                                                             await mainFunc()
+                                                        
                                                         elif reaction.emoji == emojis[1]:
                                                             await rem_reaction(clear=True)
                                                             await send.edit(embed=Embed(description="<:Hash:663295056060481556> Ping or say ID of the channel to use for 'join' logs.", color=colrs[1]))
@@ -383,9 +381,11 @@ async def h(ctx, *, command_name=None):
                                                                 find_guild["_id"], find_guild[f'{ctx.guild.id}'] = ctx.guild.name, {"joinMessage": {'channel': {'ID': int(getChannel.id)}}}
                                                                 modLogsDB.insert_one(find_guild)
                                                             return await end_help(send_embed=successful(f"Set welcome channel to {'this channel' if getChannel==ctx.channel else getChannel.mention} with default message"))
+                                                        
                                                         elif reaction.emoji == emojis[2]:
                                                             await rem_reaction(clear=True)
                                                             await send.edit(embed=Embed(description="<:Hash:663295056060481556> Ping or say ID of the channel 'join' messages should be sent", color=colrs[1]))
+                                                            
                                                             wait = await bot.wait_for('message', check=lambda message: message.channel is ctx.channel and message.author is ctx.author, timeout=120.0)
                                                             getChannel = bot.get_channel(int(wait.content) if tryInt(wait.content) else int(''.join([i for i in wait.content if i.isdigit()])) if str(wait.content).startswith('<#') and str(wait.content).endswith('>') else None)
                                                             if not getChannel:
@@ -393,6 +393,7 @@ async def h(ctx, *, command_name=None):
                                                             if not getChannel.permissions_for(ctx.guild.me).send_messages:
                                                                 return await end_help(send_msg=f"I don't have permission to send mesages in {getChannel.mention}. Please allow me '`Send Messages`' permissions and try again")
                                                             await send.edit(embed=Embed(title="Now say the welcome message", color=colrs[1], description=f"You can use the formatters below in the message and they'll be replaced with the appropriate text i.e. {{user.mention}} will be replaced with {ctx.author.mention} when sent.\n```c\n{join_leave_formatters}\n```").set_footer(text="If you want bot to display an image too, upload it with the message."))
+                                                            
                                                             wait = await bot.wait_for('message', check=lambda message: message.channel is ctx.channel and message.author is ctx.author, timeout=120.0)
                                                             find_guild = modLogsDB.find_one({f'{ctx.guild.id}': {'$exists': True}}, {'_id': False}) or {}
                                                             data = {'ID': int(getChannel.id), 'message': {'text': str(wait.content)}}
@@ -408,9 +409,11 @@ async def h(ctx, *, command_name=None):
                                                                 find_guild["_id"], find_guild[f'{ctx.guild.id}'] = ctx.guild.name, {"joinMessage": {'channel': data}}
                                                                 modLogsDB.insert_one(find_guild)
                                                             return await end_help(send_embed=successful(f"Set welcome channel to {getChannel.mention} with that message."))
+                                                        
                                                         elif reaction.emoji == emojis[3]:
                                                             await rem_reaction(clear=True)
                                                             await send.edit(embed=Embed(description="<:Hash:663295056060481556> Ping or say ID of the channel to use for 'leave' logs.", color=colrs[1]))
+                                                            
                                                             wait = await bot.wait_for('message', check=lambda message: message.channel is ctx.channel and message.author is ctx.author, timeout=120.0)
                                                             getChannel = bot.get_channel(int(wait.content) if tryInt(wait.content) else int(''.join([i for i in wait.content if i.isdigit()])) if str(wait.content).startswith('<#') and str(wait.content).endswith('>') else None)
                                                             if not getChannel:
@@ -429,11 +432,14 @@ async def h(ctx, *, command_name=None):
                                                                 find_guild["_id"], find_guild[f'{ctx.guild.id}'] = ctx.guild.name, {"leaveMessage": {'channel': {'ID': int(getChannel.id)}}}
                                                                 modLogsDB.insert_one(find_guild)
                                                             return await end_help(send_embed=successful(f"Set 'leave' channel to {getChannel.mention} with default message"))
+                                                        
                                                         elif reaction.emoji == emojis[4]:
                                                             try:
                                                                 await rem_reaction(clear=True)
                                                             except:
-                                                                [await rem_reaction(reaction, ctx.guild.me) for reaction in reaction.message.reactions if reaction.message.author == ctx.guild.me]
+                                                                for reaction in reaction.message.reactions:
+                                                                    if reaction.message.author == ctx.guild.me:
+                                                                        await rem_reaction(reaction, ctx.guild.me)
                                                             await send.edit(embed=Embed(description="<:Hash:663295056060481556> Ping or say ID of the channel 'leave' messages should be sent", color=colrs[1]))
                                                             wait = await bot.wait_for('message', check=lambda message: message.channel is ctx.channel and message.author is ctx.author, timeout=120.0)
                                                             getChannel = bot.get_channel(int(wait.content) if tryInt(wait.content) else int(''.join([i for i in wait.content if i.isdigit()])) if str(wait.content).startswith('<#') and str(wait.content).endswith('>') else None)
@@ -460,6 +466,7 @@ async def h(ctx, *, command_name=None):
                                                                 find_guild["_id"], find_guild[f'{ctx.guild.id}'] = ctx.guild.name, {"leaveMessage": {'channel': data}}
                                                                 modLogsDB.insert_one(find_guild)
                                                             return await end_help(send_embed=successful(f"Set 'leave' channel to {getChannel.mention} with that message."))
+                                                        
                                                         elif reaction.emoji == emojis[5]:
                                                             await rem_reaction(clear=True)
                                                             await send.edit(embed=Embed(title="Say the message to PM them", color=colrs[1], description=f"You can use the formatters below in the message and they'll be replaced with the appropriate text i.e. {{user.mention}} will be replaced with {ctx.author.mention} when sent.\n```c\n{join_leave_formatters}\n```").set_footer(text="If you want bot to display an image too, upload it with the message."))
@@ -482,6 +489,7 @@ async def h(ctx, *, command_name=None):
                                                                 find_guild["_id"], find_guild[f'{ctx.guild.id}'] = ctx.guild.name, {'joinMessage': {'user': data}}
                                                                 modLogsDB.insert_one(find_guild)
                                                             return await end_help(send_embed=successful(f"New members will now be PM'd that message"))
+                                                        
                                                         elif reaction.emoji == emojis[6]:
 
                                                             async def pingRole():
@@ -522,6 +530,7 @@ async def h(ctx, *, command_name=None):
                                                                                 get_the_role = get(ctx.guild.roles, name=role)
                                                                             if get_the_role:
                                                                                 role_ids.append(get_the_role.id)
+                                                                
                                                                 elif text.strip():
                                                                     if re_search(r"<@&([0-9]+)>", text.strip()):
                                                                         get_the_role = get(ctx.guild.roles, id=int(text.strip(' <@&> ')))
@@ -564,8 +573,10 @@ async def h(ctx, *, command_name=None):
                                                                 find_guild["_id"], find_guild[f'{ctx.guild.id}'] = ctx.guild.name, {'joinMessage': {'user': data}}
                                                                 modLogsDB.insert_one(find_guild)
                                                             return await end_help(send_embed=successful(f"New members'll be given {'the role' if len(findTheRoles)==1 else 'these roles'} '{rolesList}'"))
+                                                        
                                                         elif reaction.emoji == cross_emoji:
                                                             return await end_help()
+                                            
                                             elif reaction.emoji == emojis[3]:
                                                 try:
                                                     await send.clear_reactions()
@@ -602,15 +613,20 @@ async def h(ctx, *, command_name=None):
                                                 except Exception as e:
                                                     print(format_exc())
                                                     return await ctx(f"There was an error: {e}\nIf you don't know the problem please screenshot this together with your command and say `{ctx.prefix}feedback <upload your screenshot, or say what you want to say>` send the error to the bot owner.")
+                                            
                                             elif reaction.emoji == emojis[4]:
                                                 await send.edit(embed=custom_cmd_helper(ctx).set_footer(text="Go to custom commands in help menu to see the custom cmds if any."))
                                                 await rem_reaction(emojis[4], user)
                                                 await toComBack()
+                                            
                                             elif reaction.emoji == emojis[5]:
                                                 await send.edit(embed=Embed(color=0xE4AA69, title="<:Tools:663163816477196358> Settings - Choose a feature to disable", description="\n".join(map(str, ["`1`│ Disable member join channel logging", "`2`│ Reset bot prefix to default", "`3`│ Disable logging deleted or edited messages", f"`4`│ Disable private messaging on member join", "`5`│ Disable member leave channel logging", f"`6`│ Don't give a role to new members"]))).set_thumbnail(url=tools_emoji.url).set_footer(text=f"Say '{ctx.prefix}cmd del <command>' for custom cmds"))
                                                 await rem_reaction(emojis[5], user)
-                                                # try: [await send.clear_reaction(emoj) for emoj in [emojis[5], emojis[4]]]
-                                                # except: [await rem_reaction(emoj, ctx.guild.me) for emoj in [emojis[5], emojis[4]]]
+                                                
+                                                # for emoj in (emojis[5], emojis[4]):
+                                                #     try: await send.clear_reaction(emoj)
+                                                #     except: await rem_reaction(emoj, ctx.guild.me)
+                                                
                                                 await rem_reaction(cross_emoji, ctx.guild.me)
                                                 for emoj in (emojis[6], cross_emoji):
                                                     await send.add_reaction(emoj)
@@ -620,10 +636,13 @@ async def h(ctx, *, command_name=None):
                                                     try:
                                                         await send.clear_reactions()
                                                     except:
-                                                        [await rem_reaction(reaction, ctx.guild.me) for reaction in send.reactions if reaction.message.author == ctx.guild.me]
+                                                        for reaction in send.reactions:
+                                                            if reaction.message.author == ctx.guild.me:
+                                                                await rem_reaction(reaction, ctx.guild.me)
                                                     for emoj in to_react_with_main:
                                                         await send.add_reaction(emoji=emoj)
                                                     await mainFunc()
+                                                
                                                 elif reaction.emoji == emojis[1]:
                                                     chanFind, channel_id = modLogsDB.find_one({f"{ctx.guild.id}.joinMessage.channel": {'$exists': True}}, {'_id': False}), 0
                                                     if chanFind:
@@ -641,6 +660,7 @@ async def h(ctx, *, command_name=None):
                                                         return await end_help(send_embed=successful(f"Bot'll nolonger log to {ctx.guild.get_channel(channel_id).mention if ctx.guild.get_channel(channel_id) else 'the channel'} when new members join."), delete_after=10.0)
                                                     else:
                                                         return await end_help(send_msg="Bot wasn't already logging to any channel")
+                                                
                                                 elif reaction.emoji == emojis[2]:
                                                     await rem_reaction(emojis[3])
                                                     if botPrefixDB.find_one({f'{ctx.guild.id}': {'$exists': True}}) == None:
@@ -651,6 +671,7 @@ async def h(ctx, *, command_name=None):
                                                             return await end_help(send_embed=Embed(color=colrs[2], title="<:Mark:663230689860386846> Success!", description=f"Prefix successfully reset to default which is `{ctx.prefix}`"))
                                                         except Exception as e:
                                                             return await end_help(send_msg=f"Error disabling prefix\n```\n{e}\n```\n")
+                                                
                                                 elif reaction.emoji == emojis[3]:
                                                     await rem_reaction(emojis[2])
                                                     find_guild, channel_id = modLogsDB.find_one({f'{ctx.guild.id}.editDelete': {'$exists': True}}, {'_id': False}), 0
@@ -665,6 +686,7 @@ async def h(ctx, *, command_name=None):
                                                         return await end_help(send_embed=successful(f"Edited/deleted messages'll nolonger be logged{' in'+str(ctx.guild.get_channel(channel_id).mention) if ctx.guild.get_channel(channel_id) else '.'}"), delete_after=10.0)
                                                     else:
                                                         return await end_help(send_msg="No message edit or delete logging channel was set.", delete_after=10.0)
+                                                
                                                 elif reaction.emoji == emojis[4]:
                                                     userFind = modLogsDB.find_one({f"{ctx.guild.id}.joinMessage.user.message": {'$exists': True}}, {'_id': False})
                                                     if userFind:
@@ -680,6 +702,7 @@ async def h(ctx, *, command_name=None):
                                                         return await end_help(send_embed=successful(f"New member'll nolonger be private messaged on join."), delete_after=10.0)
                                                     else:
                                                         return await end_help(send_msg="Bot wasn't set to private message new members before.")
+                                                
                                                 elif reaction.emoji == emojis[5]:
                                                     chanFind, channel_id = modLogsDB.find_one({f"{ctx.guild.id}.leaveMessage.channel": {'$exists': True}}, {'_id': False}), 0
                                                     if chanFind:
@@ -697,6 +720,7 @@ async def h(ctx, *, command_name=None):
                                                         return await end_help(send_embed=successful(f"Bot'll nolonger log to {ctx.guild.get_channel(channel_id).mention if ctx.guild.get_channel(channel_id) else 'the channel'} when members leave."), delete_after=10.0)
                                                     else:
                                                         return await end_help(send_msg="Bot wasn't already logging to any channel")
+                                                
                                                 elif reaction.emoji == emojis[6]:
                                                     roleFind, roles = modLogsDB.find_one({f"{ctx.guild.id}.joinMessage.user.roles": {'$exists': True}}, {'_id': False}), []
                                                     if roleFind:
@@ -716,10 +740,13 @@ async def h(ctx, *, command_name=None):
                                                         return await end_help(send_embed=successful(f"New member'll nolonger be given {'these roles '+', '.join(x.mention for x in roles) if roles and len(roles)>1 else 'this role '+', '.join(x.mention for x in roles) if roles else 'the role(s).'}"), delete_after=10.0)
                                                     else:
                                                         return await end_help(send_msg="Bot wasn't set to give any roles to new members.")
+                                                
                                                 elif reaction.emoji == cross_emoji:
                                                     return await end_help()
+                                            
                                             elif reaction.emoji == cross_emoji:
                                                 return await end_help()
+                                            
                                             # else: await mainFunc()
 
                                 await toComBack()
@@ -727,10 +754,12 @@ async def h(ctx, *, command_name=None):
                                 await try_edit(required=True)
                                 for who in (bot.user, user):
                                     await rem_reaction(back_emoji, who)
+                            
                             elif reaction.emoji == custom_cmd_emoji:
                                 await send.edit(embed=custom_cmd_embed)
                                 await send.add_reaction(emoji=back_emoji)
                                 await rem_reaction(custom_cmd_emoji, user)
+                            
                             elif reaction.emoji == cross_emoji:
                                 return await end_help()
 
@@ -872,6 +901,6 @@ for extension in extentions:
     try:
         bot.load_extension(extension)
     except:
-        exit(f'Failed loadng extension {extension}\n', format_exc())
+        exit(f'Failed loadng extension {extension}\n' + format_exc())
 
 bot.run(tkn)

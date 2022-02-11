@@ -1,26 +1,28 @@
 from datetime import datetime
 from typing import Union
-from discord import Embed, Member, User, Colour, File, TextChannel, Forbidden, HTTPException
-from discord.utils import escape_mentions
-from discord.ext import commands
-from asyncio import TimeoutError as AsyncioTimeoutError, sleep as asyncio_sleep
+from urllib.parse import quote
 from json import loads as json_loads
 from json.decoder import JSONDecodeError
 from random import randint, choice as randchoice
 from io import StringIO as IoStringIO, BytesIO as IoBytesIO
-from googletrans import Translator
 from re import sub as re_sub, compile as re_compile, search as re_search, findall as re_findall
 from time import time as time_time
 from traceback import format_exc
 from ast import literal_eval
 from platform import system, machine
 from sys import version_info
-from urllib.parse import quote
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from asyncio import TimeoutError as AsyncioTimeoutError, sleep as asyncio_sleep
+
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageOps
+from discord import Embed, Member, User, Colour, File, TextChannel, Forbidden, HTTPException
+from discord.utils import escape_mentions
+from discord.ext import commands
+from googletrans import Translator
+
 from imports import (
     colrs, access_ids, aiohttp_request, bot, bot_owner,
     customCmdsDB, loading_msg, msg_formated, send_me, sendingTo, successful, tryInt, unsuccessful,
-    fson, custom_cmd_helper, get_fun_fact
+    fson, custom_cmd_helper, get_fun_fact, wolframID
 )
 
 class Misc(commands.Cog):
@@ -40,6 +42,7 @@ class Misc(commands.Cog):
             h, m = divmod(m, 60)
             d, h = divmod(h, 24)
             w, d = divmod(d, 7)
+
             await ctx.send(embed = Embed(color=colrs[1], description=f"[Bot Invite Link](https://discordapp.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions=1479928959)", url=f"https://discordapp.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions=1479928959")
                 .set_thumbnail(url="https://i.imgur.com/CNYbdaV.png")
                 .set_author(name=F"Owned by: {bot_owner()}", icon_url=bot_owner().avatar_url)
@@ -80,7 +83,7 @@ class Misc(commands.Cog):
                     .add_field(name="Humidity", value=f"{data['main']['humidity']}%", inline=True)
                     .add_field(name="Pressure", value=f"{data['main']['pressure']} hpa", inline=True)
                     .set_thumbnail(url=f"https://openweathermap.org/img/wn/{data['weather'][0]['icon']}@2x.png")
-                    .set_footer(text=f"Data from openweathermap.org"))
+                    .set_footer(text="Data from openweathermap.org"))
             elif (data and data.get('cod')): return await ctx.send(escape_mentions(f"The city '{city}' wasn't found, maybe check your spelling" if(data['cod']=='404') else f"Error {data['cod']}; {data.get('message')}"))
         except Exception as e:
             print(format_exc())
@@ -127,79 +130,124 @@ class Misc(commands.Cog):
             
             begin_pattern, end_pattern = re_compile(r"```((json)|.*)?\n*\s*\{"), re_compile(r"\}\s*\n*\s*```\s*\n*$")
             begin, end = re_search(begin_pattern, Json), re_search(end_pattern, Json)
-            if begin and not end: return await ctx.send(f"You used a code block '{content_replacer(begin.group()).strip(' {')}' at the beginning but didn't put '\\`\\`\\`' at the end to close it")
-            elif begin and end: Json = re_sub(begin_pattern, "{" , re_sub(end_pattern, "}", Json)).strip()
-            elif not (Json[0] == '{' and Json[-1] == '}') : return await ctx.send(F"Json must start with '{{' and end with '}}'. You started it with '{content_replacer(Json[0])}' and ended with '{content_replacer(Json[-1])}' which isn't valid Json or code block.\nTo test embed Json, go to https://troybot.xyz/embed/{ctx.guild.id} or https://glitchii.github.io/embedbuilder if you're not a mod. Or you can use the simple version of this command (which doens't use Json although quite limited) by just saying `{ctx.prefix}embed`.")
-            try: embed_json_all = json_loads(Json, strict=False)
+            if begin and not end:
+                return await ctx.send(f"You used a code block '{content_replacer(begin.group()).strip(' {')}' at the beginning but didn't put '\\`\\`\\`' at the end to close it")
+            elif begin and end:
+                Json = re_sub(begin_pattern, "{" , re_sub(end_pattern, "}", Json)).strip()
+            elif not (Json[0] == '{' and Json[-1] == '}') :
+                return await ctx.send(F"Json must start with '{{' and end with '}}'. You started it with '{content_replacer(Json[0])}' and ended with '{content_replacer(Json[-1])}' which isn't valid Json or code block.\nTo test embed Json, go to https://troybot.xyz/embed/{ctx.guild.id} or https://glitchii.github.io/embedbuilder if you're not a mod. Or you can use the simple version of this command (which doens't use Json although quite limited) by just saying `{ctx.prefix}embed`.")
+            
+            try:
+                embed_json_all = json_loads(Json, strict=False)
             except JSONDecodeError as err:
                 reSearch, re_line = re_search(r"(('\s*:)|(:\s*')|('\s*\})|(\{\s*'))", Json), re_search(r"line \d+ column \d+", str(err))
-                if reSearch: return await ctx.send(f"You used a single quotation mark (') which isn't correct Json syntax. Replace `{content_replacer(reSearch.group())}` with `{content_replacer(reSearch.group().replace(chr(39), chr(34)))}`{' on '+re_line.group()+' of your json' if re_line else ''} and try again. To test embed Json, go to https://glitchii.github.io/embedbuilder/ or you can use the simple version of this command (which doens't use Json although quite limited) by just saying `{ctx.prefix}embed`.")
+                if reSearch:
+                    return await ctx.send(f"You used a single quotation mark (') which isn't correct Json syntax. Replace `{content_replacer(reSearch.group())}` with `{content_replacer(reSearch.group().replace(chr(39), chr(34)))}`{' on '+re_line.group()+' of your json' if re_line else ''} and try again. To test embed Json, go to https://glitchii.github.io/embedbuilder/ or you can use the simple version of this command (which doens't use Json although quite limited) by just saying `{ctx.prefix}embed`.")
                 return await ctx.send(f"Failed to load the Json with the following error: {str(err).lower()}")
-            except Exception as err: return await ctx.send(f"Failed to load the Json with the following error: {str(err).lower()}")
+            except Exception as err:
+                return await ctx.send(f"Failed to load the Json with the following error: {str(err).lower()}")
+                
             embed_json = embed_content = None
             for i in embed_json_all:
                 if type(i) != dict and 'embed' in embed_json_all:
-                    if embed_json_all.get('embed'): embed_json = embed_json_all['embed']
-                    if embed_json_all.get('content'): embed_content = embed_json_all['content']
-                else: embed_json = embed_json_all
-            if not embed_content and not embed_json: return await ctx.send("Embed is empty, check if the Json is right")
-            if embed_json.get('timestamp'): embed_json['timestamp'] = embed_json['timestamp'][0:-1] if not embed_json['timestamp'][-1].isdigit() else embed_json['timestamp']
+                    if embed_json_all.get('embed'):
+                        embed_json = embed_json_all['embed']
+                    if embed_json_all.get('content'):
+                        embed_content = embed_json_all['content']
+                else:
+                    embed_json = embed_json_all
+                
+            if not embed_content and not embed_json:
+                return await ctx.send("Embed is empty, check if the Json is right")
+            if embed_json.get('timestamp'):
+                embed_json['timestamp'] = embed_json['timestamp'][0:-1] if not embed_json['timestamp'][-1].isdigit() else embed_json['timestamp']
+            
             embed = Embed.from_dict(embed_json)
             try: await channel.send(embed=embed, content=embed_content)
-            except Forbidden: return await ctx.send(f"I got a 'forbidden' error. Check if I have permission to read and write in {channel.mention}")
-            except HTTPException: return await ctx.send("There was an error creating the embed from that Json. Check if you used valid embed keys or spelling. To test embed Json, go to https://glitchii.github.io/embedbuilder/") 
-            except Exception as e: return await ctx.send(f"Oops, an error: {e}")
+            except Forbidden:
+                return await ctx.send(f"I got a 'forbidden' error. Check if I have permission to read and write in {channel.mention}")
+            except HTTPException:
+                return await ctx.send("There was an error creating the embed from that Json. Check if you used valid embed keys or spelling. To test embed Json, go to https://glitchii.github.io/embedbuilder/") 
+            except Exception as e:
+                return await ctx.send(f"Oops, an error: {e}")
         else:
             try:
                 cc = commands.ColourConverter()
                 check = lambda m: m.author == ctx.author and m.channel == ctx.channel
-                a1=await ctx.send("`1\\"+"6` Please say a title of the embed below or say `none` to skip title or `cancel` to cancel embed")
-                titl=await self.bot.wait_for('message', check=check, timeout=240.0)
-                if f"{ctx.prefix}{ctx.command.name}" in titl.content.strip(): return await a1.delete()
-                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", titl.content.lower()): return await ctx.send("Embed canceled")
+                a1 = await ctx.send("`1\\"+"6` Please say a title of the embed below or say `none` to skip title or `cancel` to cancel embed")
+                titl = await self.bot.wait_for('message', check=check, timeout=240.0)
+                
+                if f"{ctx.prefix}{ctx.command.name}" in titl.content.strip():
+                    return await a1.delete()
+                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", titl.content.lower()):
+                    return await ctx.send("Embed canceled")
                 
                 await a1.edit(content="<:Mark:663230689860386846> Title complete")
-                a2=await ctx.send("`2\\"+"6` Alright now write the embed description (10m to write), `none` to skip description or `cancel` to cancel embed")
-                desc=await self.bot.wait_for('message', check=check, timeout=600.0)
-                if desc.content.strip()==f"{ctx.prefix}{ctx.command.name}": return[await x.delete() for x in [a1, a2]]
-                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", desc.content.lower()): return await ctx.send("Embed canceled")
+                a2 = await ctx.send("`2\\"+"6` Alright now write the embed description (10m to write), `none` to skip description or `cancel` to cancel embed")
+                desc = await self.bot.wait_for('message', check=check, timeout=600.0)
+                if desc.content.strip() == f"{ctx.prefix}{ctx.command.name}":
+                    for x in (a1, a2):
+                        await x.delete()
+                    return
+                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", desc.content.lower()):
+                    return await ctx.send("Embed canceled")
                 
                 await a2.edit(content="<:Mark:663230689860386846> Description complete")
-                a3=await ctx.send("`3\\"+"6` Now for the thumbnail (Image link only no text if link is wrong embed won't show), `none` to not show thumbnail or `cancel` to cancel embed")
-                thumb=await self.bot.wait_for('message', check=check, timeout=120.0)
-                if thumb.content.strip()==f"{ctx.prefix}{ctx.command.name}": return[await x.delete() for x in [a1, a2, a3]]
-                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", thumb.content.lower()): return await ctx.send("Embed canceled")
+                a3 = await ctx.send("`3\\"+"6` Now for the thumbnail (Image link only no text if link is wrong embed won't show), `none` to not show thumbnail or `cancel` to cancel embed")
+                thumb = await self.bot.wait_for('message', check=check, timeout=120.0)
+                if thumb.content.strip() == f"{ctx.prefix}{ctx.command.name}":
+                    for x in (a1, a2, a3):
+                        await x.delete()
+                    return
+                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", thumb.content.lower()):
+                    return await ctx.send("Embed canceled")
                 
                 await a3.edit(content="<:Mark:663230689860386846> Thumbnail complete")
-                a4=await ctx.send("`4\\"+"6` Nearly there, now image link (Image link only no text if link is wrong embed won't show), `none` to not show image or `cancel` to cancel embed")
-                img=await self.bot.wait_for('message', check=check, timeout=120.0)
-                if img.content.strip()==f"{ctx.prefix}{ctx.command.name}": return[await x.delete() for x in [a1, a2, a3, a4]]
-                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", img.content.lower()): return await ctx.send("Embed canceled")
+                a4 = await ctx.send("`4\\"+"6` Nearly there, now image link (Image link only no text if link is wrong embed won't show), `none` to not show image or `cancel` to cancel embed")
+                img = await self.bot.wait_for('message', check=check, timeout=120.0)
+                if img.content.strip() == f"{ctx.prefix}{ctx.command.name}":
+                    for x in (a1, a2, a3, a4):
+                        await x.delete()
+                    return
+                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", img.content.lower()):
+                    return await ctx.send("Embed canceled")
                 
                 await a4.edit(content="<:Mark:663230689860386846> Image complete")
-                a5=await ctx.send("`5\\"+"6` Now for the color hex, `none` to show default color or `cancel` to cancel embed")
-                col=await self.bot.wait_for('message', check=check, timeout=120.0)
-                if col.content.strip()==f"{ctx.prefix}{ctx.command.name}": return[await x.delete() for x in [a1, a2, a3, a4, a5]]
-                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", col.content.lower()): return await ctx.send("Embed canceled")
+                a5 = await ctx.send("`5\\"+"6` Now for the color hex, `none` to show default color or `cancel` to cancel embed")
+                col = await self.bot.wait_for('message', check=check, timeout=120.0)
+                if col.content.strip() == f"{ctx.prefix}{ctx.command.name}":
+                    for x in (a1, a2, a3, a4, a5):
+                        await x.delete()
+                    return
+                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", col.content.lower()):
+                    return await ctx.send("Embed canceled")
                 
                 await a5.edit(content="<:Mark:663230689860386846> color complete")
-                a6=await ctx.send("`6\\"+"6` Do you want your name and image on top of the embed? `yes` OR `no` or `cancel` to cancel embed")
-                auth=await self.bot.wait_for('message', check=check, timeout=120.0)
-                if auth.content.strip()==f"{ctx.prefix}{ctx.command.name}": return[await x.delete() for x in [a1, a2, a3, a4, a5, a6]]
-                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", auth.content.lower()): return await ctx.send("Embed canceled")
+                a6 = await ctx.send("`6\\"+"6` Do you want your name and image on top of the embed? `yes` OR `no` or `cancel` to cancel embed")
+                auth = await self.bot.wait_for('message', check=check, timeout=120.0)
+                if auth.content.strip() == f"{ctx.prefix}{ctx.command.name}":
+                    for x in (a1, a2, a3, a4, a5, a6):
+                        await x.delete()
+                    return
+                elif re_search(r"^((q(uit)?)|(c(ancel)?))$", auth.content.lower()):
+                    return await ctx.send("Embed canceled")
                 
                 await a6.edit(content="<:Mark:663230689860386846> Author complete")
-                if re_search(r"^n((ah)|(o([np]e)?))?$", col.content.lower()): col=0x4f545c
-                else: col = await cc.convert(ctx, col.content)
-                if re_search(r"^n((ah)|(o([np]e)?))?$", titl.content.lower()): titl=None
-                else: titl=titl.content
-                if re_search(r"^n((ah)|(o([np]e)?))?$", desc.content.lower()): desc=None
-                else: desc=desc.content
-                embed=Embed(color=col,title=titl,description=desc)
-                if not re_search(r"^n((ah)|(o([np]e)?))?$", thumb.content.lower()): embed.set_thumbnail(url=thumb.content)
-                if not re_search(r"^n((ah)|(o([np]e)?))?$", img.content.lower()): embed.set_image(url=img.content)
-                if re_search(r"^y(((up)|(e([sp]|ah))))?$", auth.content.lower()): embed.set_author(name=ctx.author,icon_url=ctx.author.avatar_url)
-                try: await channel.send(embed=embed)
+
+                col = 0x4f545c if re_search(r"^n((ah)|(o([np]e)?))?$", col.content.lower()) else await cc.convert(ctx, col.content)
+                titl = None if re_search(r"^n((ah)|(o([np]e)?))?$", titl.content.lower()) else titl.content
+                desc = None if re_search(r"^n((ah)|(o([np]e)?))?$", desc.content.lower()) else desc.content
+                
+                embed = Embed(color=col, title=titl, description=desc)
+                if not re_search(r"^n((ah)|(o([np]e)?))?$", thumb.content.lower()):
+                    embed.set_thumbnail(url=thumb.content)
+                if not re_search(r"^n((ah)|(o([np]e)?))?$", img.content.lower()):
+                    embed.set_image(url=img.content)
+                if re_search(r"^y(((up)|(e([sp]|ah))))?$", auth.content.lower()):
+                    embed.set_author(name=ctx.author,icon_url=ctx.author.avatar_url)
+
+                try:
+                    await channel.send(embed=embed)
                 except:
                     print(format_exc())
                     await ctx.send(f"error\n```py\n{format_exc()}```\nPlease use the feedback command to send this to my developer if you don't know the problem.")
@@ -209,7 +257,8 @@ class Misc(commands.Cog):
     @commands.command(description="Shows someone's size (Not shown in help menu)")
     async def size(self, ctx, user: User = None):
         num = randint(1, 30)
-        if not user: await ctx.send(f"{ctx.author.mention}'s :eggplant: is {num}cm long!\n3" + "="*num + "D")
+        if not user:
+            await ctx.send(f"{ctx.author.mention}'s :eggplant: is {num}cm long!\n3" + "="*num + "D")
         elif user == self.bot.user:
             num = randint(40, 100)
             await ctx.send(f"My :eggplant: is {num}cm longer than yours \😎!\n3" + "="*num + "D")
@@ -218,13 +267,14 @@ class Misc(commands.Cog):
     @commands.command(aliases=("tr",), description="Translates words from a different language to a language of your choice")
     async def translate(self, ctx, to, *, text=''):
         try:
-            tra=Translator().translate(text, dest=to)
+            tra = Translator().translate(text, dest=to)
             await ctx.send(embed=Embed(color=Colour.lighter_grey(), description=None)
                 .add_field(name=f"<:Right:663400557154795528> From {tra.src}",value=text, inline=True)
                 .add_field(name=f"<:Left:663400555493851182> To {to}",value=tra.text, inline=False)
                 .set_footer(text=f"Requested by {ctx.author.display_name}", icon_url=ctx.author.avatar_url)
                 .set_thumbnail(url="https://i.imgur.com/wmpg9F5.png"))
         except Exception as ext1:
+            print(format_exc())
             return await ctx.send("There is currently a problem with a certain google translate library which this command relies on. Command will be fixed as soon as that is.")
             await ctx.send(embed=Embed(color=Colour.red(), description=f"❗{ext1}")
                 .set_footer(text="You probably used discord emojis eg :smile: OR didn't put a destination language to translate to"))
@@ -238,6 +288,7 @@ class Misc(commands.Cog):
                 .set_author(name=ctx.author.name, icon_url=ctx.author.avatar_url)
                 .set_author(name="Detected", icon_url="https://i.imgur.com/wmpg9F5.png"))
         except Exception as ex2:
+            print(format_exc())
             return await ctx.send("There is currently a problem with a certain google translate library which this command relies on. Command will be fixed as soon as that is.")
             await ctx.send(embed=Embed(color=Colour.red(), title="❗Error", description=f"{ex2}"))
     
@@ -247,7 +298,6 @@ class Misc(commands.Cog):
             if not Text and not ctx.message.attachments: return await ctx.send(f"You didn't provide text or image to reverse but here, I'll reverse your command for you; {(ctx.prefix+ctx.invoked_with)[::-1]}")
             if ctx.message.attachments:
                 loading = await ctx.send(loading_msg())
-                from PIL import Image, ImageOps
                 img = ImageOps.mirror(Image.open(IoBytesIO(await aiohttp_request(ctx.message.attachments[0].url, 'read'))))
                 byteImg = IoBytesIO()
                 img.save(byteImg, format='PNG', quality=95)
@@ -270,12 +320,12 @@ class Misc(commands.Cog):
     async def dice(self, ctx, minNum=1, maxNum=6):
         await ctx.send(randint(minNum, maxNum))
     
-    @commands.command(description="Ask me any question, and I may answer (I can even help you with your homework 😉)") #### Ask
+    @commands.command(description="Ask me any question, and I may answer (I can even help you with your homework)")
     async def ask(self, ctx, *, text):
         await ctx.send(embed = Embed(description="Ask Wolfram", color=0xcce9f9)
             .set_thumbnail(url='https://png.pngtree.com/svg/20170103/45df75c29d.png')
             .add_field(name=r"\💬 Question:", value=text, inline=False)
-            .add_field(name=r"\🤖 Reply:", value=((await aiohttp_request(f"http://api.wolframalpha.com/v2/result?appid=RPYQ54-Q3W9QJKWR9&i={quote(text, safe='').replace('%20', '+')}", 'read')).decode('utf-8')).replace("Wolfram|Alpha did not understand your input", "I didn't quite understand that."), inline=True))
+            .add_field(name=r"\🤖 Reply:", value=((await aiohttp_request(f"http://api.wolframalpha.com/v2/result?appid={wolframID}&i={quote(text, safe='').replace('%20', '+')}", 'read')).decode('utf-8')).replace("Wolfram|Alpha did not understand your input", "I didn't quite understand that."), inline=True))
 
     
     @commands.command(description="Virtually fight someone with a weapon of your choice to teach them a lesson")
@@ -286,18 +336,17 @@ class Misc(commands.Cog):
             "and it worked!", "and %user% never saw it coming.", "but %user% grabbed the attack and used it against %attacker%!", "but it only scratched %user%!",
             "and %user% was killed by it.", "but %attacker% activated %user%'s trap card!", "and %user% was killed!", "but likely %user% had a big vibranium shield that saved him"
         )
-        if user == ctx.author: return await ctx.send(escape_mentions(f"{ctx.author.display_name} fought themself but only ended up in a mental hospital!"))
+        if user == ctx.author:
+            return await ctx.send(escape_mentions(f"{ctx.author.display_name} fought themself but only ended up in a mental hospital!"))
         elif user == ctx.guild.me:
             return await ctx.send(
                 escape_mentions(
-                    randchoice(
-                        (
-                            f"{ctx.author.display_name} tried to fight the master but ended up in hospital",
-                            'Sorry that person is to cool',
-                            f"{ctx.author.display_name} tried to fight me with {weapon} but I used my big lazer gun to cut {weapon} in half",
-                            f"{ctx.author.display_name} tried to fight me but can't because I own the fight command so I used {weapon} on them instead.",
-                        )
-                    )
+                    randchoice((
+                        f"{ctx.author.display_name} tried to fight the master but ended up in hospital",
+                        'Sorry that person is to cool',
+                        f"{ctx.author.display_name} tried to fight me with {weapon} but I used my big lazer gun to cut {weapon} in half",
+                        f"{ctx.author.display_name} tried to fight me but can't because I own the fight command so I used {weapon} on them instead.",
+                    ))
                 )
             )
 
@@ -335,7 +384,7 @@ class Misc(commands.Cog):
             time = f"Today at {datetime.utcnow().strftime('%I:%M %p').lstrip('0').replace('am', 'AM').replace('pm', 'PM')}" # %-I is platform specific.
             memberCol = tuple(int((str(member.color) if str(member.color) != "#000000" else "#ffffff").lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
 
-            user = Image.open(IoBytesIO(await aiohttp_request(str(member.avatar_url_as(format='png')),'read')))
+            # user = Image.open(IoBytesIO(await aiohttp_request(str(member.avatar_url_as(format='png')),'read')))
             user = Image.open(IoBytesIO(await aiohttp_request(str(member.avatar_url),'read'))).resize((72, 72))
 
             # -- Border radius ---
@@ -440,7 +489,7 @@ class Misc(commands.Cog):
                     return await ctx.channel.send(embed=em)
             if Seconds > 3600 and Seconds <= 100000: return await ctx.send(embed=unsuccessful("The maximum number of seconds is `3600` (an hour)"))
             if not text:
-                embed=Embed(description=f"`{seconds}` seconds left", color=0x6EDD19).set_footer(text=f"Timer requested by {ctx.author.display_name}")
+                embed = Embed(description=f"`{seconds}` seconds left", color=0x6EDD19).set_footer(text=f"Timer requested by {ctx.author.display_name}")
                 embed.set_author(name=f"Timer running.",icon_url="http://www.myiconfinder.com/uploads/iconsets/256-256-2ecd699596533557c7fe98f2f8870132-timer.png")
                 msg = await ctx.channel.send(embed=embed)
                 for _ in range(Seconds):
@@ -450,36 +499,36 @@ class Misc(commands.Cog):
                         .set_footer(text=f"Timer requested by {ctx.author.display_name}")
                         .set_author(name=f"Timer running.", icon_url="http://www.myiconfinder.com/uploads/iconsets/256-256-2ecd699596533557c7fe98f2f8870132-timer.png"))
                 await ctx.send(ctx.author.mention, delete_after=10.0)
-                embed2=Embed(color=colrs[3], description=f'⏰ {ctx.author.mention}, your timer for {seconds} seconds has ended!')
+                embed2 = Embed(color=colrs[3], description=f'⏰ {ctx.author.mention}, your timer for {seconds} seconds has ended!')
             
             elif "`" in text:
-                embed=Embed(color=0x6EDD19, description=f"You'll be reminded the following in `{secs}` seconds:\n\n{text}")
+                embed = Embed(color=0x6EDD19, description=f"You'll be reminded the following in `{secs}` seconds:\n\n{text}")
                 embed.set_author(name=f"Timer running.",icon_url="http://www.myiconfinder.com/uploads/iconsets/256-256-2ecd699596533557c7fe98f2f8870132-timer.png")
                 msg = await ctx.channel.send(embed=embed)
                 for _ in range(Seconds):
                     await asyncio_sleep(1)
                     Seconds -= 1
-                    embed2=Embed(color=colrs[2],description=f"You'll be reminded the following in `{Seconds}` seconds:\n\n{text}")
+                    embed2 = Embed(color=colrs[2],description=f"You'll be reminded the following in `{Seconds}` seconds:\n\n{text}")
                     embed2.set_author(name=f"Timer running.",icon_url="http://www.myiconfinder.com/uploads/iconsets/256-256-2ecd699596533557c7fe98f2f8870132-timer.png")
                     await msg.edit(embed=embed2)
                 await ctx.send(ctx.author.mention, delete_after=10.0)
-                embed2=Embed(color=colrs[3], description=f"⏰ {ctx.author.mention}, here is the reminder you set for {secs} seconds:\n{text}\nSet on: {ctx.message.created_at:%a/%b/%Y} │ [Message link]({ctx.message.jump_url})")
+                embed2 = Embed(color=colrs[3], description=f"⏰ {ctx.author.mention}, here is the reminder you set for {secs} seconds:\n{text}\nSet on: {ctx.message.created_at:%a/%b/%Y} │ [Message link]({ctx.message.jump_url})")
             else:
-                embed=Embed(color=colrs[2],description=f"You'll be reminded the following in `{secs}` seconds:\n```\n{text}\n```\n")
+                embed = Embed(color=colrs[2],description=f"You'll be reminded the following in `{secs}` seconds:\n```\n{text}\n```\n")
                 embed.set_author(name=f"Timer running.",icon_url="http://www.myiconfinder.com/uploads/iconsets/256-256-2ecd699596533557c7fe98f2f8870132-timer.png")
                 msg = await ctx.channel.send(embed=embed)
                 for _ in range(Seconds):
                     await asyncio_sleep(1)
                     Seconds -= 1
-                    embed2=Embed(color=colrs[2],description=f"You'll be reminded the following in `{Seconds}` seconds:\n```\n{text}\n```\n")
+                    embed2 = Embed(color=colrs[2],description=f"You'll be reminded the following in `{Seconds}` seconds:\n```\n{text}\n```\n")
                     embed2.set_author(name=f"Timer running.",icon_url="http://www.myiconfinder.com/uploads/iconsets/256-256-2ecd699596533557c7fe98f2f8870132-timer.png")
                     await msg.edit(embed=embed2)
                 await ctx.send(ctx.author.mention, delete_after=10.0)
-                embed2=Embed(color=colrs[3], description=f"⏰ {ctx.author.mention}, here is the reminder you set for {secs} seconds:\n```\n{text}\n```\nSet on: {ctx.message.created_at: %a/%b/%Y} │ [Message link]({ctx.message.jump_url})")
+                embed2 = Embed(color=colrs[3], description=f"⏰ {ctx.author.mention}, here is the reminder you set for {secs} seconds:\n```\n{text}\n```\nSet on: {ctx.message.created_at: %a/%b/%Y} │ [Message link]({ctx.message.jump_url})")
             await ctx.reply(embed=embed2)
 
         except Exception as e:
-            embed=Embed(color=Colour.dark_orange())
+            embed = Embed(color=Colour.dark_orange())
             embed.title="There was an error."
             embed.description=f"Please report this to bot owner if you don't know what's wrong\n```\n{e}\n```"
             await ctx.reply(embed=embed)
@@ -507,7 +556,7 @@ class Misc(commands.Cog):
 
     @commands.command(description="Converts text to regional text for you")
     async def regional(self, ctx,*, text):
-        letters={
+        letters = {
             'a': '\N{REGIONAL INDICATOR SYMBOL LETTER A}', 'b': '\N{REGIONAL INDICATOR SYMBOL LETTER B}',
             'c': '\N{REGIONAL INDICATOR SYMBOL LETTER C}', 'd': '\N{REGIONAL INDICATOR SYMBOL LETTER D}',
             'e': '\N{REGIONAL INDICATOR SYMBOL LETTER E}', 'f': '\N{REGIONAL INDICATOR SYMBOL LETTER F}',
@@ -598,26 +647,30 @@ class Misc(commands.Cog):
         
 
     @commands.command(hidden=True, description="Can only be used by bot owner to send messages to a certain channel or to a person, either to respond to feedback or for something else.")
-    async def send(self, ctx, ID, *, message):
+    async def send(self, ctx, id, *, message):
         if ctx.author.id not in access_ids: return
         try:
-            to = sendingTo(ctx, ID)
+            to = sendingTo(ctx, int(id))
             if '-e' in message:
                 embed = Embed(color = colrs[2])
                 embed.description=msg_formated(re_sub(r'\s?-e', '', message), ctx=ctx, to=to, embed=embed)
                 embed.set_footer(text=f"{ctx.author}", icon_url=ctx.author.avatar_url)
-                if(ctx.message.attachments): embed.set_image(url=ctx.message.attachments[0].url)
+                if(ctx.message.attachments):
+                    embed.set_image(url=ctx.message.attachments[0].url)
                 await to.send(embed=embed)
-            else: await to.send(content=msg_formated(message, ctx=ctx, to=to), file=await ctx.message.attachments[0].to_file() if ctx.message.attachments else None)
-            if ctx.channel != to: await ctx.send('Message sent')
-        except: return await ctx.send(f"```py\n{format_exc()}\n```")
+            else:
+                await to.send(content=msg_formated(message, ctx=ctx, to=to), file=await ctx.message.attachments[0].to_file() if ctx.message.attachments else None)
+            if ctx.channel != to:
+                await ctx.send('Message sent')
+        except:
+            return await ctx.send(f"```py\n{format_exc()}\n```")
 
     @commands.command(hidden=True)
     async def d(self, ctx, chnl, msg=None, hold=0):
         await asyncio_sleep(int(hold))
         if ctx.author.id in access_ids:
-            if msg is None:chnl, msg=ctx.channel.id, chnl
-            msg=await self.bot.get_channel(int(chnl)).fetch_message(int(msg))
+            if msg is None: chnl, msg=ctx.channel.id, chnl
+            msg = await self.bot.get_channel(int(chnl)).fetch_message(int(msg))
             await msg.delete()
 
     @commands.command(hidden=True)
@@ -643,30 +696,33 @@ class Misc(commands.Cog):
         elif member == self.bot.user or member.bot:
             return await ctx.send("You can't marry a bot silly")
         await ctx.send(f"{member.mention} ⬇", delete_after=10)
-        sent=await ctx.send(embed=Embed(color=0x07c2b0,description=f"{member.display_name} agree to take {ctx.author.display_name} as your wedded wife or husband?").set_footer(text="Reject or Accept?"))
-        [await sent.add_reaction(emoji=self.bot.get_emoji(id)) for id in (663201785237995520, 663230689860386846)]
+        sent = await ctx.send(embed = Embed(color = 0x07c2b0,description = f"{member.display_name} agree to take {ctx.author.display_name} as your wedded wife or husband?").set_footer(text="Reject or Accept?"))
+        
+        for id in (663201785237995520, 663230689860386846):
+            await sent.add_reaction(emoji=self.bot.get_emoji(id))
+
         reaction = await self.bot.wait_for(
             'reaction_add',
-            check=lambda reaction, user: user == member
-            and str(reaction.emoji.id)
-            in ('663230689860386846', '663201785237995520'),
+            check=lambda reaction,
+            user: user == member and str(reaction.emoji.id) in ('663230689860386846', '663201785237995520'),
             timeout=120.0,
         )
 
-        return await ctx.send(embed=Embed(color=colrs[2],
-            description=f"Congrats {ctx.author.display_name}, {member.display_name} accepted and you're now married") if (reaction.emoji==self.bot.get_emoji(663230689860386846)) else (Embed(color=Colour.red(),
-            description=f"{member.display_name} has rejected you {ctx.author.display_name} :(\nBut don't cry... It's okay you can try someone else.", title="Rejected")))
+        return await ctx.send(embed = Embed(color=colrs[2],
+            description = f"Congrats {ctx.author.display_name}, {member.display_name} accepted and you're now married") if (reaction.emoji==self.bot.get_emoji(663230689860386846)) else (Embed(color=Colour.red(),
+            description = f"{member.display_name} has rejected you {ctx.author.display_name} :(\nBut don't cry... It's okay you can try someone else.", title="Rejected")))
 
     @commands.command(brief="Use to send feedback to bot owner.", description="You can also send screenshots by sending the image with the command.")
     async def feedback(self, ctx, *, feedback=''):
         if not feedback and not ctx.message.attachments: return await ctx.send(f"You didn't give any feedback {ctx.author.mention}.\n`{ctx.prefix}{ctx.command} <Your Feedback>`")
         try:
             embed = Embed(color=colrs[1], title="We got some feedback")
-            embed.add_field(name="<:User:663295066223411200> From", value=f"{ctx.author} │ {ctx.author.id}")
-            embed.add_field(name="<:Server:663296208537911347> Server", value=f"{ctx.guild.name} │ {ctx.guild.id}")
-            embed.add_field(name="<:Message:663295062385360906> Feedback", value=f"{feedback}\n[Message link]({ctx.message.jump_url})", inline=False)
+            embed.add_field(name = "<:User:663295066223411200> From", value = f"{ctx.author} │ {ctx.author.id}")
+            embed.add_field(name = "<:Server:663296208537911347> Server", value = f"{ctx.guild.name} │ {ctx.guild.id}")
+            embed.add_field(name = "<:Message:663295062385360906> Feedback", value = f"{feedback}\n[Message link]({ctx.message.jump_url})", inline=False)
             embed.set_thumbnail(url=ctx.author.avatar_url).set_footer(text=f"{len(ctx.guild.members)} │ Channel: {ctx.channel} ({ctx.channel.id})")
-            if ctx.message.attachments: embed.set_image(url=ctx.message.attachments[0].url)
+            if ctx.message.attachments:
+                embed.set_image(url=ctx.message.attachments[0].url)
             await send_me().send(embed=embed)
             await ctx.send("Your feedback has been sent. Thanks")
         except Exception as e: return await ctx.send(f"Looks like I ran into an error while sending your feedback\n```\n{e}```\nIf you have a way to contact owner please contact about this error")
@@ -762,7 +818,8 @@ class Misc(commands.Cog):
     @commands.command(description="Sends a random meme image")
     async def meme(self, ctx):
         meme = await aiohttp_request("https://meme-api.herokuapp.com/gimme", "json")
-        while meme['nsfw']: meme = await aiohttp_request("https://meme-api.herokuapp.com/gimme", "json")
+        while meme['nsfw']:
+            meme = await aiohttp_request("https://meme-api.herokuapp.com/gimme", "json")
         return await ctx.send(embed=Embed(title=meme['title'], url=meme['postLink']).set_image(url=meme['url']))
         
 

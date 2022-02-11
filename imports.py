@@ -1,34 +1,42 @@
-from pymongo import MongoClient
-from inspect import currentframe, getframeinfo
+from os import environ as env
 from traceback import format_exc
+from inspect import currentframe
 from re import compile as re_compile, sub as re_sub, search as re_search, findall as re_findall
-from discord import Embed, Color, Intents
 from random import choice as randchoice
-from discord.ext.commands import Bot
 from json import dumps as json_dumps
 from aiohttp import ClientSession
-from os import environ as env
-from dbl import DBLClient
 from threading import Thread
+from dbl import DBLClient
+
+from pymongo import MongoClient
+from discord import Embed, Color, Intents
+from discord.ext.commands import Bot
 from discord.utils import escape_mentions
 from dotenv import load_dotenv
 load_dotenv()
-tkn, mongoURI, dblTkn = env['token'], env['mongoURI'], env['dblToken']
+
+tkn, mongoURI, dblTkn, wolframID = (
+    env['token'],
+    env['mongoURI'],
+    env['dblToken'],
+    env['wolframID']
+)
 
 # Database setup
-MongoClient = MongoClient(mongoURI)
+dbClient = MongoClient(mongoURI)
 botPrefixDB, modLogsDB, botBanDB, customCmdsDB, mutedDB, hangmanDB = (
-    MongoClient['db']['prefix'], MongoClient['db']['modLogs'], MongoClient['db']['botBans'],
-    MongoClient['db']['customCmds'], MongoClient['db']['muted'], MongoClient['hangman']['leaderboard'])
+    dbClient['db']['prefix'], dbClient['db']['modLogs'], dbClient['db']['botBans'],
+    dbClient['db']['customCmds'], dbClient['db']['muted'], dbClient['hangman']['leaderboard'])
 
 # User IDs with full access to the bot
 access_ids = (642791754160013312, int(env['altID']))
 
-# prefix
+# Prefix setup
 prefixes = {pref['_id']: pref['prefix'] for pref in botPrefixDB.find()}
 
+# Listen for changes in the prefixes database in a thread and update the prefixes dict accordingly
 def dbTriggers():
-    with MongoClient.db.prefix.watch() as stream:
+    with dbClient.db.prefix.watch() as stream:
         for change in stream:
             if change['ns']['coll'] == 'prefix':
                 if data := botPrefixDB.find_one(change['documentKey']):
@@ -38,7 +46,6 @@ def dbTriggers():
                         prefixes[change['documentKey']['_id']] = data['prefix']
                 elif prefixes.get(change['documentKey']['_id']):
                     del prefixes[change['documentKey']['_id']]
-# Listen for changes in the prefixes database in a thread and update the prefixes dict accordingly
 Thread(target=dbTriggers).start()
 
 intents, guildPrefix = Intents.default(), lambda guildID: (botPrefixDB.find_one({'_id': guildID}) or {}).get('prefix', '...')
@@ -61,7 +68,9 @@ class Cmds:
     info = ('feedback <message/screenshot>', 'help [command name]', 'about', "invite [@bot/bot ID]", "ping")
 
 dblpy = DBLClient(bot, dblTkn, autopost=True)
+
 bot_owner = lambda: bot.get_user(642791754160013312)
+send_me = lambda: bot.get_channel(int(env['logChannel'])) or bot_owner()
 tstGuild = lambda guild1 = True: bot.get_guild(int(env['gID']) if guild1 else int(env['gID1']))
 loading_msg = lambda customMsg = None, alone = False, emoji = False: ("<a:Preloader:663234181219745813>" if alone else "Loading... <a:Preloader:663234181219745813>" if not customMsg else f"{customMsg} <a:Preloader:663234181219745813>") if not emoji else bot.get_emoji(663234181219745813)
 
@@ -72,17 +81,17 @@ async def aiohttp_request(URL, Type = None, params = None, get = True, data = {}
                 if Type is None: return get
                 elif Type.lower() == 'read': return await get.read()
                 elif Type.lower() == 'json': return await get.json()
-                raise ValueError(f"Expected string argument 'read' or 'json', got '{Type}'")
         else:
             async with sess.post(URL, headers=headers, data=json_dumps(data), timeout=timeout) as post:
                 if Type is None: return post
                 elif Type.lower() == 'read': return await post.read()
                 elif Type.lower() == 'json': return await post.json()
-                raise ValueError(f"Expected string argument 'read' or 'json', got '{Type}'")
+                
+        raise ValueError(f"Expected string argument 'read' or 'json', got '{Type}'")
 
-def fson(Dict, formatted=True):
-    try: return json_dumps(Dict, indent=4 if formatted else None, ensure_ascii=False)
-    except: return Dict
+def fson(dictionary, formatted=True):
+    try: return json_dumps(dictionary, indent=4 if formatted else None, ensure_ascii=False)
+    except: return dictionary
 
 def lineNum(sayText = True):
     line = currentframe().f_back.f_lineno
@@ -92,19 +101,18 @@ def tryInt(arg):
     try: return int(arg)
     except: return False
 
-def sendingTo(ctx, ID):
+def sendingTo(ctx, id):
     try:
-        if not tryInt(ID): return eval(str(ID))
-        got, gotServer = bot.get_channel(int(ID)) or bot.get_user(int(ID)), bot.get_guild(int(ID))
+        if not tryInt(id): return eval(str(id))
+        got, gotServer = bot.get_channel(id) or bot.get_user(id), bot.get_guild(id)
         if got: return got
         elif gotServer:
             for chan in gotServer.text_channels:
                 if chan.permissions_for(gotServer.me).send_messages: return chan
-        return None
-    except Exception as exc: print(exc); return None
-
-def send_me():
-    return bot.get_channel(663485400870027274) or bot_owner()
+        return
+    except Exception as exc:
+        print(exc)
+        return
 
 def successful(Message, Embeded=True):
     return Embed(description=f"<:Mark:663230689860386846> {Message}", color=colrs[2]) if(Embeded) else (f"<:Mark:663230689860386846> {Message}")
@@ -118,15 +126,15 @@ async def get_fun_fact():
 
 def greetings(name=''):
     return str(randchoice((f'Hey there {name}', f'good day {name}', f'hello there {name}', f'hola {name}',
-    f"how's it going {name}?", f'sup {name}', f"what's up {name}?", f'how do {name}?',
-    f"how goes it {name}?", f"what's crackin' {name}?",
-    f"what's poppin' {name}?", f"what's hangin' {name}?", f"what's the dizzle {name}?", f"what's up {name}?", f'bonjour {name}', f'salut {name}'))).capitalize()
+        f"how's it going {name}?", f'sup {name}', f"what's up {name}?", f'how do {name}?',
+        f"how goes it {name}?", f"what's crackin' {name}?",
+        f"what's poppin' {name}?", f"what's hangin' {name}?", f"what's the dizzle {name}?", f"what's up {name}?", f'bonjour {name}', f'salut {name}'))).capitalize()
 
 def position_number(number):
     return (f'{number}' + ('st' if f'{number}'[-1]=='1' else 'nd' if f'{number}'[-1]=='2' else 'rd' if f'{number}'[-1]=='3' else 'th')) if len(f'{number}')==1 else (f'{number}' + ('st' if f'{number}'[-1]=='1' and f'{number}'[-2:]!='11' else 'nd' if f'{number}'[-1]=='2' and f'{number}'[-2:]!='12' else 'rd' if f'{number}'[-1]=='3' and f'{number}'[-2:]!='13' else 'th'))
 
 def errorMsg(ctx):
-    return f"Oops... It looks like I fell into a little error.\nPlease screen shot this error together with the command you said for the error to happen then say `{ctx.prefix}feedback [any message if you want]` and also attach the screenshot. Thanks."
+    return f"Looks like there was an error.\nPlease screenshot this error together with the command used then type `{ctx.prefix}feedback [additional message if necessary]` with the screenshot attached. Thanks."
 
 def msg_formated(Text, **kwargs):
     locals().update(kwargs)
@@ -164,6 +172,7 @@ def custom_cmd_format(ctx, text):
         (r'\{ *channel\.id *\}', ctx.channel.id),
         (r'\{ *channel\.mention *\}', ctx.channel.mention)
     )
+
     for tupl in reg:
         text = re_sub(tupl[0], f'{tupl[1]}', text)
     return text
@@ -176,6 +185,7 @@ custom_cmd_formatters = (
     "{user}", "{user.name}", "{user.mention}", "{user.id}", "{user.nick}", "{user.avatar_url}",
     "{channel}", "{channel.name}", "{channel.mention}", "{channel.id}",
 )
+
 spaces, rows = len(max(custom_cmd_formatters, key=lambda x: len(x))) + 1, ''
 for value in custom_cmd_formatters:
     rows+=f'{value.ljust(spaces)}'
@@ -187,6 +197,7 @@ join_leave_formatters = (
     "{server.members}", "{server.member_count}", "{server.icon}",
     "{user}", "{user.name}", "{user.mention}", "{user.id}", "{user.nick}", "{user.avatar_url}",
 )
+
 spaces, rows = len(max(join_leave_formatters, key=lambda x: len(x))) + 1, ''
 for value in join_leave_formatters:
     rows+=f'{value.ljust(spaces)}'
@@ -207,6 +218,7 @@ def opts(text, dictionary = {}):
             splitted = re_sub(r'((?<=^-\w)\w*) ', '\\1<>split<>', lst).split('<>split<>')
             key, value = splitted[0][1:], re_sub(r'^"(.+)"$', '\\1', splitted[1].strip())
             dictionary[key], text = value, re_sub(fr" ?--?{key} ?|{value}", '', text, 2)
-    except: print(format_exc())
+    except:
+        print(format_exc())
     dictionary['text'] = text
     return dictionary

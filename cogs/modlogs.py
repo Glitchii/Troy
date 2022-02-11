@@ -54,7 +54,8 @@ class Modlogs(commands.Cog):
                     .add_field(name='Attachment:', value=f"[File URL]({msg.attachments[0].url})" if msg.attachments else None, inline=True)
                     .add_field(name="<:Message:663295062385360906> Message:", value=msg.content, inline=len(msg.content)<20)
                     .set_thumbnail(url=msg.author.avatar_url))
-        except: print(format_exc())
+        except:
+            print(format_exc())
     
     @commands.Cog.listener()
     async def on_message_edit(self, before, after):
@@ -72,13 +73,14 @@ class Modlogs(commands.Cog):
                     .add_field(name="<:Left:663400555493851182> Before:", value=before.content, inline=len(before.content)<20)
                     .add_field(name='<:Right:663400557154795528> After:', value=after.content, inline=len(after.content)<20)
                     .set_thumbnail(url=before.author.avatar_url))
-        except: print(format_exc())
+        except:
+            print(format_exc())
 
     @commands.Cog.listener()
     async def on_member_join(self, member):
         if (find := mutedDB.find_one({"_id": f"{member.guild.id}"})) and f"{member.id}" in find['muted']:
             try:
-                if roles := [x for x in member.guild.roles if x.name == "Mute​d" and str(x.color) == '#79828a'] or [await member.guild.create_role(name="Mute​d", color=colrs[0])]:
+                if roles := [x for x in member.guild.roles if x.name == "Mute​d" and str(x.color) == '#79828a'] or (await member.guild.create_role(name="Mute​d", color=colrs[0]),):
                     for role in roles:
                         await member.add_roles(role)
                         for channel in member.guild.text_channels:
@@ -87,8 +89,9 @@ class Modlogs(commands.Cog):
                         for channel in member.guild.voice_channels:
                             try: await channel.set_permissions(role, speak=False, reason="Muted member rejoined")
                             except: pass
-            except: print(format_exc())
-            
+            except:
+                print(format_exc())
+
         if (mdFind := modLogsDB.find_one({f"{member.guild.id}.joinMessage":{'$exists': True}}, {'_id': False})) and not member.bot:
             if mdFind[f'{member.guild.id}']["joinMessage"].get('channel'):
                 try:
@@ -98,55 +101,62 @@ class Modlogs(commands.Cog):
                             attachment = File(IoBytesIO(await aiohttp_request(link, 'read')), filename=f"attachment.{link.split('/')[-1].split('.')[1]}")
                         else: attachment = None
                         await member.guild.get_channel(mdFind[f'{member.guild.id}']["joinMessage"]["channel"]["ID"]).send(joinLeaveFormat(member, mdFind[f'{member.guild.id}']["joinMessage"]["channel"]["message"]["text"]), file=attachment)
+                    
+                    elif not member.bot:
+                        loading = await (chan := member.guild.get_channel(mdFind[f'{member.guild.id}']["joinMessage"]["channel"]["ID"])).send(loading_msg())
+                        embed = (Embed(colour=0x49a56f, timestamp=datetime.utcnow(), title=randchoice((
+                                f"<:Right:663400557154795528> Hey welcome to the server {member}", f"<:Right:663400557154795528> Welcome {member}, remember leaving isn't an option",
+                                f'<:Right:663400557154795528> Welcome aboard {member}', f"<:Right:663400557154795528> Everyone! We got a new member, {member}",
+                                f"<:Right:663400557154795528> Everyone, I introduce you {member}", f'<:Right:663400557154795528> {member.name} just joined, let the party begin',
+                                f"<:Right:663400557154795528> {member.name} we've been waiting for you", f"Look... It's {member.name}!")))
+                            .add_field(name="<:User:663295066223411200> Member:", value=member, inline=True)
+                            .add_field(name="<:ID:663403744314261504> Member ID:", value=member.id, inline=True)
+                            .add_field(name="🤖 Bot Account", value=member.bot, inline=True)
+                            .set_thumbnail(url=member.avatar_url)
+                            .add_field(name="Member count:", value=len(member.guild.members), inline=True))
+                        await chan.send(embed=embed)
+                        await loading.delete()
+                    
                     else:
-                        if not member.bot:
-                            loading = await (chan := member.guild.get_channel(mdFind[f'{member.guild.id}']["joinMessage"]["channel"]["ID"])).send(loading_msg())
-                            embed = (Embed(colour=0x49a56f, timestamp=datetime.utcnow(), title=randchoice((
-                                    f"<:Right:663400557154795528> Hey welcome to the server {member}", f"<:Right:663400557154795528> Welcome {member}, remember leaving isn't an option",
-                                    f'<:Right:663400557154795528> Welcome aboard {member}', f"<:Right:663400557154795528> Everyone! We got a new member, {member}",
-                                    f"<:Right:663400557154795528> Everyone, I introduce you {member}", f'<:Right:663400557154795528> {member.name} just joined, let the party begin',
-                                    f"<:Right:663400557154795528> {member.name} we've been waiting for you", f"Look... It's {member.name}!")))
-                                .add_field(name="<:User:663295066223411200> Member:", value=member, inline=True)
-                                .add_field(name="<:ID:663403744314261504> Member ID:", value=member.id, inline=True)
-                                .add_field(name="🤖 Bot Account", value=member.bot, inline=True)
-                                .set_thumbnail(url=member.avatar_url)
-                                .add_field(name="Member count:", value=len(member.guild.members), inline=True))
-                            await chan.send(embed=embed)
-                            await loading.delete()
-                        else:
-                            embed=(Embed(colour=0x4f597d, timestamp=datetime.utcnow(), title=randchoice([
-                                f'<:Right:663400557154795528> Looks like we got a new bot in the server.','<:Right:663400557154795528> A new bot just joined']))
-                                .set_thumbnail(url=member.avatar_url)
-                                .add_field(name="🤖 Bot name:", value=member, inline=True)
-                                .add_field(name="<:ID:663403744314261504> Bot ID:", value=member.id, inline=True)
-                                .set_footer(text=f"Find out more with 'user info' command"))
-                            try:
-                                botInfo = await dblpy.http.get_bot_info(member.id)
-                                if botInfo.get('prefix'): embed.add_field(name="Prefix:", value=botInfo['prefix'], inline=True)
-                                if botInfo.get('lib'): embed.add_field(name="Library:", value='Unknown' if botInfo['lib'].lower() == 'other' else botInfo['lib'], inline=True)
-                                if botInfo.get("owners"):
-                                    if len(botInfo['owners']) > 1:
-                                        try: embed.add_field(name="Developers:", value = ", ".join(str(self.bot.get_user(int(ID))) for ID in botInfo['owners']), inline=True)
-                                        except: embed.add_field(name="Developer IDs:", value = ", ".join(map(str, botInfo['owners'])), inline=True); print(format_exc())
-                                    else: 
-                                        try: embed.add_field(name="Developer:", value = ", ".join(str(self.bot.get_user(int(ID))) for ID in botInfo['owners']), inline=True)
-                                        except: embed.add_field(name="Developer's ID:", value = ", ".join(map(str, botInfo['owners'])), inline=True)
-                                if botInfo.get("server_count"): embed.add_field(name = "Bot is in:", value=f"{botInfo['server_count']} servers", inline=True)
-                                if botInfo.get("shortdesc"): embed.add_field(name = "Short description", value=botInfo['shortdesc'], inline=True)
-                            except: pass
-                            await member.guild.get_channel(mdFind[f'{member.guild.id}']["joinMessage"]["channel"]["ID"]).send(embed=embed)
+                        embed = (Embed(colour=0x4F597D, timestamp=datetime.utcnow(), title=randchoice(('<:Right:663400557154795528> Looks like we got a new bot in the server.', '<:Right:663400557154795528> A new bot just joined',)),)
+                            .set_thumbnail(url=member.avatar_url)
+                            .add_field(name="🤖 Bot name:", value=member, inline=True)
+                            .add_field(name="<:ID:663403744314261504> Bot ID:", value=member.id, inline=True, )
+                            .set_footer(text="Find out more with 'user info' command" ))
+
+                        try:
+                            botInfo = await dblpy.http.get_bot_info(member.id)
+                            if botInfo.get('prefix'): embed.add_field(name="Prefix:", value=botInfo['prefix'], inline=True)
+                            if botInfo.get('lib'): embed.add_field(name="Library:", value='Unknown' if botInfo['lib'].lower() == 'other' else botInfo['lib'], inline=True)
+                            if botInfo.get("owners"):
+                                if len(botInfo['owners']) > 1:
+                                    try: embed.add_field(name="Developers:", value = ", ".join(str(self.bot.get_user(int(ID))) for ID in botInfo['owners']), inline=True)
+                                    except: embed.add_field(name="Developer IDs:", value = ", ".join(map(str, botInfo['owners'])), inline=True); print(format_exc())
+                                else: 
+                                    try: embed.add_field(name="Developer:", value = ", ".join(str(self.bot.get_user(int(ID))) for ID in botInfo['owners']), inline=True)
+                                    except: embed.add_field(name="Developer's ID:", value = ", ".join(map(str, botInfo['owners'])), inline=True)
+                            if botInfo.get("server_count"): embed.add_field(name = "Bot is in:", value=f"{botInfo['server_count']} servers", inline=True)
+                            if botInfo.get("shortdesc"): embed.add_field(name = "Short description", value=botInfo['shortdesc'], inline=True)
+                        except: pass
+                        await member.guild.get_channel(mdFind[f'{member.guild.id}']["joinMessage"]["channel"]["ID"]).send(embed=embed)
                 except: print(format_exc())
             if mdFind[f'{member.guild.id}']["joinMessage"].get("user"):
                 try:
                     if 'message' in mdFind[f'{member.guild.id}']["joinMessage"]["user"].keys():
                         message = mdFind[f'{member.guild.id}']["joinMessage"]["user"].get('message', {})
-                        if message.get('attachment'): link, attachment = message['attachment'], File(IoBytesIO(await aiohttp_request(link, 'read')), filename=f"attachment.{link.split('/')[-1].split('.')[1]}")
-                        else: attachment = None
+                        if message.get('attachment'):
+                            link, attachment = message['attachment'], File(IoBytesIO(await aiohttp_request(link, 'read')), filename=f"attachment.{link.split('/')[-1].split('.')[1]}")
+                        else:
+                            attachment = None
                         await member.send(joinLeaveFormat(member, message.get('text', f"Hey, welcome to {member.guild.name} {member.name}")), file=attachment)
                     if mdFind[f'{member.guild.id}']["joinMessage"]["user"].get("roles"):
-                        try: [await member.add_roles(iD) for iD in [member.guild.get_role(role) for role in mdFind[f'{member.guild.id}']["joinMessage"]["user"]["roles"]]]
-                        except: print(f"Failed to give roles on join:\n{format_exc()}\n- {lineNum()}")
-                except: print(format_exc())
+                        try:
+                            for iD in [member.guild.get_role(role) for role in mdFind[f'{member.guild.id}']["joinMessage"]["user"]["roles"]]:
+                                await member.add_roles(iD)
+                        except:
+                            print(f"Failed to give roles on join:\n{format_exc()}\n- {lineNum()}")
+                except:
+                    print(format_exc())
     
     @commands.Cog.listener()
     async def on_member_remove(self, member):
@@ -156,7 +166,8 @@ class Modlogs(commands.Cog):
                     if mdFind[f'{member.guild.id}']["leaveMessage"]["channel"]["message"].get('attachment'):
                         link = mdFind[f'{member.guild.id}']["leaveMessage"]["channel"]["message"]['attachment']
                         attachment = File(IoBytesIO(await aiohttp_request(link, 'read')), filename=f"attachment.{link.split('/')[-1].split('.')[1]}")
-                    else: attachment = None
+                    else:
+                        attachment = None
                     await member.guild.get_channel(mdFind[f'{member.guild.id}']["leaveMessage"]["channel"]["ID"]).send(joinLeaveFormat(member, mdFind[f'{member.guild.id}']["leaveMessage"]["channel"]["message"]["text"]), file=attachment)
                 else:
                     await member.guild.get_channel(mdFind[f'{member.guild.id}']["leaveMessage"]["channel"]["ID"]).send(embed=(Embed(colour=0x8b6660, timestamp=datetime.utcnow(), title=f'<:Left:663400555493851182> {member.name} just left us \\😔')
