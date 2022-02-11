@@ -63,7 +63,7 @@ class Mod(Cog):
 
     @command(aliases=('purge',), description="Clear a number of messages you want from a channel or users")
     async def clear(self, ctx, limit:int, members:Greedy[Member]=None):
-        if ctx.author.id in not access_ids and not ctx.author.guild_permissions.manage_messages: return await ctx.send("You need '`Manage Messages`' permissions.")
+        if ctx.author.id not in access_ids and not ctx.author.guild_permissions.manage_messages: return await ctx.send("You need '`Manage Messages`' permissions.")
         if not ctx.guild.me.guild_permissions.manage_messages: return await ctx.send("'`Manage Messages`' permission is required to delete other people's messages, which I don't have.")
         if not members:
             deleted = await ctx.channel.purge(limit=limit+1)

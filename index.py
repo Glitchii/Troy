@@ -173,8 +173,6 @@ async def logout(ctx):
 
 
 emojis = "0⃣", "1⃣", "2⃣", "3⃣", "4⃣", "5⃣", "6⃣", "7⃣", "8⃣", "9⃣"
-
-
 @bot.command(aliases=('help',), brief="See the help menu", description="Or get help with a certain command.")
 async def h(ctx, *, command_name=None):
     if not command_name:
@@ -765,19 +763,13 @@ async def h(ctx, *, command_name=None):
 
                 while True:
                     await mainFunc()
-            except AsyncioTimeoutError:
-                return
-            except ExitRequest:
-                return
-            except HTTPException:
-                return print(format_exc())
-            except:
-                pass
+            except AsyncioTimeoutError: return
+            except ExitRequest: return
+            except HTTPException: return print(format_exc())
+            except: pass
             finally:
-                try:
-                    await end_help()
-                except ExitRequest:
-                    return
+                try: await end_help()
+                except ExitRequest: return
         else:
             return await ctx.author.send(f"Hi, here's my help menu https://troybot.xyz/commands/{ctx.guild.id}/")
     else:
