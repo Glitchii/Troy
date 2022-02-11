@@ -1,0 +1,13 @@
+PyNaCl
+asyncio
+googletrans
+pillow
+Image
+discord.py
+matplotlib
+pymongo
+dnspython
+dblpy
+youtube_dl
+colorthief
+python-dotenv
