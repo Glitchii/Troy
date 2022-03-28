@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 from traceback import format_exc
 from datetime import datetime
 from io import StringIO as IoStringIO, BytesIO as IoBytesIO
