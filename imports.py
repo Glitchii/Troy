@@ -3,7 +3,7 @@ from traceback import format_exc
 from inspect import currentframe
 from re import compile as re_compile, sub as re_sub, search as re_search, findall as re_findall
 from random import choice as randchoice
-from json import dumps as json_dumps
+from json import loads as json_loads, dumps as json_dumps
 from aiohttp import ClientSession
 from threading import Thread
 from dbl import DBLClient
@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 tkn, mongoURI, dblTkn, wolframID = (
-    env['token'],
+    env.get('testToken', env['token']),
     env['mongoURI'],
     env['dblToken'],
     env['wolframID']
@@ -60,7 +60,7 @@ colrs = 0x79828a, 0xee9f1b, 0x41ee97, 0xf55711, 0x6e7073, 0x00c198
 
 class ExitRequest(Exception): pass
 class Cmds:
-    misc = ("gender <name>", "screenshot <person> <message>", "fight <person> <weapon>", "embed <channel> [Json]", "reverse <text/image>", "hack <person>", "eval <code_in_codeblock>", "dice [min/max]", "shorten/unshorten <url>", "translate/tr <lang-abbreviation e.g. en> <text>","detect <hola>", "weather <city>", "timer|reminder <seconds> [Message]", "fancify <text>", "marry <person>", "regional <text>", "color <Hex code>", "joke", "8ball <question>", "funfact", "log [limit]", "ask <Question>", "meme")
+    misc = ("gender <name>", "screenshot <person> <message>", "fight <person> <weapon>", "embed <channel> [Json]", "reverse <text/image>", "hack <person>", "eval <code_in_codeblock>", "dice [min/max]", "shorten/unshorten <url>", "translate/tr <language> <text>","detect <hola>", "weather <city>", "timer|reminder <seconds> [Message]", "fancify <text>", "marry <person>", "regional <text>", "color <Hex code>", "joke", "8ball <question>", "funfact", "log [limit]", "ask <Question>", "meme")
     music = ('play <yt url/key-word>', 'pause/resume', 'skip', 'stop', 'playing', 'queue')
     mod = ('ban/massban <person> [person2...] [reason]', 'unban <ID> [ID2...] [reason]','tempban <person> [person2...] <seconds> [reason]', 'timedban <person> [person2...] <seconds> [reason]', 'timedkick <person> [person2...] <seconds> [reason]', 'kick/masskick <person> [person2...] [reason]', 'clear <number> [person]', 'pin <message/image>', 'mute <person> [person2...] [reason]', 'unmute <person> [person2...] [reason]')
     games = ('hangman', 'hangman leaderboard/l','rps <choice eg. rock/r>', '8ball <Question>', 'guess')
@@ -76,18 +76,19 @@ loading_msg = lambda customMsg = None, alone = False, emoji = False: ("<a:Preloa
 
 async def aiohttp_request(URL, Type = None, params = None, get = True, data = {}, headers = {}, timeout = None):
     async with ClientSession() as sess:
+        async def output(method):
+            if Type is None: return method
+            elif Type.lower() == 'read': return await method.read()
+            elif Type.lower() == 'json': return await method.json()
+            elif Type.lower() == 'text-json': return json_loads(await method.read())
+            else: raise ValueError(f"Expected string argument 'read' or 'json', got '{Type}'")
+            
         if get:
             async with sess.get(URL, params=params) as get:
-                if Type is None: return get
-                elif Type.lower() == 'read': return await get.read()
-                elif Type.lower() == 'json': return await get.json()
+                return await output(get)
         else:
             async with sess.post(URL, headers=headers, data=json_dumps(data), timeout=timeout) as post:
-                if Type is None: return post
-                elif Type.lower() == 'read': return await post.read()
-                elif Type.lower() == 'json': return await post.json()
-                
-        raise ValueError(f"Expected string argument 'read' or 'json', got '{Type}'")
+                return await output(post)
 
 def fson(dictionary, formatted=True):
     try: return json_dumps(dictionary, indent=4 if formatted else None, ensure_ascii=False)

@@ -21,26 +21,28 @@ class Games(Cog):
     @command()
     async def rps(self, ctx, choice):
         botchoice, chosen = randchoice(('rock', 'paper', 'scissors')), get_close_matches(choice.lower(), ("rock", "r", "paper", "p", "scissors", "s"))
+        
         if chosen:
-            await ctx.send(
-                f"You win! You chose {chosen[0]} and I chose {botchoice}"
-                if botchoice == 'rock'
-                and chosen[0] in ('p', 'paper')
-                or botchoice == 'paper'
-                and chosen[0] in ('s', 'scissors')
-                or botchoice == 'scissors'
-                and chosen[0] in ('r', 'rock')
+            chosen = 'rock' if chosen[0] == 'r' else 'paper' if chosen[0] == 'p' else 'scissors' if chosen[0] == 's' else chosen[0]
+            return await ctx.send(
+                f"You win! You chose {chosen} and I chose {botchoice}"
+                    if botchoice == 'rock'
+                    and chosen == 'paper'
+                    or botchoice == 'paper'
+                    and chosen == 'scissors'
+                    or botchoice == 'scissors'
+                    and chosen == 'rock'
                 else f"It's a draw. We both chose {botchoice}"
                 if botchoice == 'rock'
-                and chosen[0] in ('r', 'rock')
-                or botchoice == 'paper'
-                and chosen[0] in ('p', 'paper')
-                or botchoice == 'scissors'
-                and chosen[0] in ('s', 'scissors')
-                else f"You lose. You chose {chosen[0]} and I chose {botchoice}"
+                    and chosen == 'rock'
+                    or botchoice == 'paper'
+                    and chosen == 'paper'
+                    or botchoice == 'scissors'
+                    and chosen == 'scissors'
+                else f"You lose. You chose {chosen} and I chose {botchoice}"
             )
 
-        else: await ctx.send(escape_mentions(f"Your choice '{choice}' is not right, you must choose from rock, paper, scissors or just r, p and s"))
+        await ctx.send(escape_mentions(f"Your choice '{choice}' is not right, you must choose from rock, paper, and scissors or just r, p and s"))
 
 
     @command(name='8ball', description="Ask a yes or no question and the magical 8ball will answere.")

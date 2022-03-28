@@ -2,6 +2,7 @@ from io import BytesIO as IoBytesIO
 from colorthief import ColorThief
 from discord.ext.commands import command, Cog, group
 from re import search as re_search, sub as re_sub, compile as re_compile
+from PIL import Image
 from traceback import format_exc
 from os import remove as os_rem
 from datetime import datetime
@@ -32,9 +33,13 @@ class Server(Cog):
         try:
             if count > 25: return await ctx.send('Max count is 25')
             if not ctx.guild.chunked: await self.bot.request_offline_members(ctx.guild)
+            
+            embed = Embed(title=f'{count} Newest members (from the newest)', colour=Colour(0x36393f))
             members = sorted(ctx.guild.members, key=lambda m: m.joined_at, reverse=True)[:count]
-            embed = Embed(title=f'{ctx.guild.member_count if ctx.guild.member_count >= count else ""} Newest members (from the newest)', colour=Colour(0x36393f))
-            for member in members: embed.add_field(name=f'{member}', value=f'> Joined on: {member.joined_at:%d of %B, %Y [%A at %I:%M%p}\n> Account made on: {member.created_at:%d of %B, %Y [%A]}', inline=False)
+            
+            for member in members:
+                embed.add_field(name=f'{member}', value=f'> Joined on: {member.joined_at:%d of %B, %Y [%A at %I:%M%p}\n> Account made on: {member.created_at:%d of %B, %Y [%A]}', inline=False)
+            
             await ctx.send(embed=embed)
         except Exception as e: return await ctx.send(e)
 
@@ -133,47 +138,53 @@ class Server(Cog):
             if server.icon_url:
                 try:
                     color_thief = ColorThief(IoBytesIO(await aiohttp_request(str(server.icon_url_as(format='png')), 'read')))
-                    color_thief.get_color(quality=1)  # dominant_color =
+                    color_thief.get_color(quality=1)
                     palette = color_thief.get_palette(color_count=6)
                     x, y, z = palette[4][0] if len(palette) >= 6 else palette[0][0], palette[4][1] if len(
                         palette) >= 6 else palette[0][1], palette[4][2] if len(palette) >= 6 else palette[0][2]
                     iconCol = Colour(int('0x%02x%02x%02x' % (x, y, z), 16))
                     embed.color = iconCol
+                    # img = Image.open(IoBytesIO(await aiohttp_request(str(server.icon_url_as(format='png')), 'read')))
+                    # img = img.convert("RGB")
+                    # img = img.resize((1, 1), resample=0)
+                    # embed = Embed(colour=Colour.lighter_grey(), description=f"{server.name}")
+                    # embed.color = Colour(int('0x%02x%02x%02x' % img.getpixel((0, 0)), 16))
                 except: print(f"{format_exc()}\n - {lineNum(True)}")
-            (embed
-                .set_thumbnail(url=server.icon_url).set_footer(text=f"Looking for my info? The command is '{ctx.prefix}info'")
-                .add_field(name="Owner", value=server.owner, inline=True)
-                .add_field(name="ID", value=server.id, inline=True)
-                .add_field(name='Region', value=server.region.value.capitalize(), inline=True)
-                .add_field(name='Name', value=server.name, inline=True)
-                .add_field(name="Created on", value=f"{server.created_at:%d/%m/%Y} ({(ctx.message.created_at - server.created_at).days} days ago)", inline=True)
-                .add_field(name="System channel", value=server.system_channel.mention if server.system_channel else None, inline=True)
-                .add_field(name="Server description", value=server.description, inline=True)
-                .add_field(name="Shard ID", value=server.shard_id, inline=True)
-                .add_field(name="Server Icon", value=f"[Click Here]({server.icon_url})" if len(server.icon_url) >= 2 else None, inline=True)
-                .add_field(name="Server features", value=(", ".join(server.features)).capitalize().replace('_', ' ') if server.features else None, inline=len(server.features) <= 5)
-                .add_field(name="Server emotes", value=len(server.emojis), inline=True)
-                .add_field(name="Roles", value=len(server.roles), inline=True)
-                .add_field(name="Premium boosters", value=server.premium_subscription_count, inline=True)
-                .add_field(name="Members", value=f"\
-                    <:online:666002136567513088>{sum(x.status.value == 'online' and x.bot for x in server.members)} bots, {sum(x.status.value == 'online' and not x.bot for x in server.members)} {'person' if sum(x.status.value == 'online' and not x.bot for x in server.members) == 1 else 'people'}\n\
-                    <:Idle:664140822672834580>{sum(x.status.value == 'idle' and x.bot for x in server.members)} bots, {sum(x.status.value == 'idle' and not x.bot for x in server.members)} {'person' if sum(x.status.value == 'idle' and not x.bot for x in server.members) == 1 else 'people'}\n\
-                    <:dnd:664140822295347221>{sum(x.status.value == 'dnd' and x.bot for x in server.members)} bots, {sum(x.status.value == 'dnd' and not x.bot for x in server.members)} {'person' if sum(x.status.value == 'dnd' and not x.bot for x in server.members) == 1 else 'people'}\n\
-                    <:offline:664140822823829514> {sum(x.status.value == 'offline' and x.bot for x in server.members)} bots, {sum(x.status.value == 'offline' and not x.bot for x in server.members)} {'person' if sum(x.status.value == 'offline' and not x.bot for x in server.members) == 1 else 'people'}\n\
-                    <:Sum:663243303478886461>{server.member_count} in total", inline=True)
-                .add_field(name="Channels", value=f"\
-                    <:Textchannel:776521784307875891> {len(textC)}\n\
-                    <:Voicechannel:776521783980326944> {len(voiceC)}\n\
-                    <:Stagechannel:866906785842200636> {len(stageC)}\n\
-                    {len(voiceC) + len(textC) + len(stageC)} Total channels", inline=True)
-                .add_field(name="Nitro boosting level", value=server.premium_tier, inline=True))
+            embed.set_thumbnail(url=server.icon_url).set_footer(text=f"Looking for my info? The command is '{ctx.prefix}info'")
+            embed.add_field(name="Owner", value=server.owner, inline=True)
+            embed.add_field(name="ID", value=server.id, inline=True)
+            if type(server.region) != str:
+                embed.add_field(name='Region', value=server.region.value.capitalize(), inline=True)
+            embed.add_field(name='Name', value=server.name, inline=True)
+            embed.add_field(name="Created on", value=f"{server.created_at:%d/%m/%Y} ({(ctx.message.created_at - server.created_at).days} days ago)", inline=True)
+            embed.add_field(name="System channel", value=server.system_channel.mention if server.system_channel else None, inline=True)
+            embed.add_field(name="Server description", value=server.description, inline=True)
+            embed.add_field(name="Shard ID", value=server.shard_id, inline=True)
+            embed.add_field(name="Server Icon", value=f"[Click Here]({server.icon_url})" if len(server.icon_url) >= 2 else None, inline=True)
+            embed.add_field(name="Server features", value=(", ".join(server.features)).capitalize().replace('_', ' ') if server.features else None, inline=len(server.features) <= 5)
+            embed.add_field(name="Server emotes", value=len(server.emojis), inline=True)
+            embed.add_field(name="Roles", value=len(server.roles), inline=True)
+            embed.add_field(name="Premium boosters", value=server.premium_subscription_count, inline=True)
+            embed.add_field(name="Members", value=f"\
+                <:online:666002136567513088>{sum(x.status.value == 'online' and x.bot for x in server.members)} bots, {sum(x.status.value == 'online' and not x.bot for x in server.members)} {'person' if sum(x.status.value == 'online' and not x.bot for x in server.members) == 1 else 'people'}\n\
+                <:Idle:664140822672834580>{sum(x.status.value == 'idle' and x.bot for x in server.members)} bots, {sum(x.status.value == 'idle' and not x.bot for x in server.members)} {'person' if sum(x.status.value == 'idle' and not x.bot for x in server.members) == 1 else 'people'}\n\
+                <:dnd:664140822295347221>{sum(x.status.value == 'dnd' and x.bot for x in server.members)} bots, {sum(x.status.value == 'dnd' and not x.bot for x in server.members)} {'person' if sum(x.status.value == 'dnd' and not x.bot for x in server.members) == 1 else 'people'}\n\
+                <:offline:664140822823829514> {sum(x.status.value == 'offline' and x.bot for x in server.members)} bots, {sum(x.status.value == 'offline' and not x.bot for x in server.members)} {'person' if sum(x.status.value == 'offline' and not x.bot for x in server.members) == 1 else 'people'}\n\
+                <:Sum:663243303478886461>{server.member_count} in total", inline=True)
+            embed.add_field(name="Channels", value=f"\
+                <:Textchannel:776521784307875891> {len(textC)}\n\
+                <:Voicechannel:776521783980326944> {len(voiceC)}\n\
+                <:Stagechannel:866906785842200636> {len(stageC)}\n\
+                {len(voiceC) + len(textC) + len(stageC)} Total channels", inline=True)
+            embed.add_field(name="Nitro boosting level", value=server.premium_tier, inline=True)
+            
             try: embed.add_field(name="Active invites", value=len(await server.invites()), inline=True)
             except: pass
             try: embed.set_image(url=server.banner_url)
             except: pass
-            (embed
-                .add_field(name="Animated icon?", value="Yes" if server.is_icon_animated() else "No", inline=True)
-                .add_field(name="My prefix", value=prefixes.get('prefix', '...') if prefixes else '...', inline=True))
+            embed.add_field(name="Animated icon?", value="Yes" if server.is_icon_animated() else "No", inline=True)
+            embed.add_field(name="My prefix", value=prefixes.get('prefix', '...') if prefixes else '...', inline=True)
+
             await ctx.send(embed=embed)
         except Exception as e:
             await ctx.send(f"Looks like I fell into a little error; {e}")
@@ -258,8 +269,21 @@ class Server(Cog):
         try:
             member, loading = member or ctx.author, await ctx.send(loading_msg("Getting information..."))
             col = member.color
-            if str(member.color) == "#000000":
-                col = (member.status == 0xf04747 if Status.do_not_disturb else 0x43b581 if member.status == Status.online else 0xfaa61a if member.status == Status.idle else 0x747f8d)
+
+            if member.avatar_url:
+                try:
+                    img = Image.open(IoBytesIO(await aiohttp_request(str(member.avatar_url_as(format='png')), 'read')))
+                    img = img.convert("RGB")
+                    img = img.resize((1, 1), resample=0)
+                    col = Colour(int('0x%02x%02x%02x' % img.getpixel((0, 0)), 16))
+                except:
+                    print(f"{format_exc()}\n - {lineNum(True)}")
+                    if str(member.color) == "#000000":
+                        col = member.status == 0xf04747 if Status.do_not_disturb else 0x43b581 if member.status == Status.online else 0xfaa61a if member.status == Status.idle else 0x747f8d
+            else:
+                if str(member.color) == "#000000":
+                    col = member.status == 0xf04747 if Status.do_not_disturb else 0x43b581 if member.status == Status.online else 0xfaa61a if member.status == Status.idle else 0x747f8d
+
             embed = Embed(color=col)
             embed.set_thumbnail(url=member.avatar_url)
             embed.set_footer(text=f"Requested by {ctx.author.name}", icon_url=ctx.author.avatar_url)

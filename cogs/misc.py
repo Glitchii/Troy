@@ -295,20 +295,19 @@ class Misc(commands.Cog):
     @commands.command()
     async def reverse(self, ctx, *, Text=None, image=None):
         try:
-            if not Text and not ctx.message.attachments: return await ctx.send(f"You didn't provide text or image to reverse but here, I'll reverse your command for you; {(ctx.prefix+ctx.invoked_with)[::-1]}")
+            if not Text and not ctx.message.attachments:
+                return await ctx.send(f"You didn't provide text or image to reverse but here, I'll reverse your command for you; {(ctx.prefix+ctx.invoked_with)[::-1]}")
             if ctx.message.attachments:
                 loading = await ctx.send(loading_msg())
                 img = ImageOps.mirror(Image.open(IoBytesIO(await aiohttp_request(ctx.message.attachments[0].url, 'read'))))
                 byteImg = IoBytesIO()
                 img.save(byteImg, format='PNG', quality=95)
 
-                await ctx.send(
+                return await ctx.send(
                     content=escape_mentions(Text[::-1]) if Text else None,
-                    file=File(IoBytesIO(byteImg.getvalue()), filename='img.png'),
-                )
-
-                del ImageOps, Image
-            else: await ctx.send(escape_mentions(Text[::-1]))
+                    file=File(IoBytesIO(byteImg.getvalue()), filename='img.png'))
+                    
+            await ctx.send(escape_mentions(Text[::-1]))
         except:
             print(format_exc())
             return await ctx.send('Looks like a fell into an error...')
@@ -356,7 +355,7 @@ class Misc(commands.Cog):
     @commands.command(description="Tells you a random joke")
     async def joke(self, ctx):
         try:
-            joke = (await aiohttp_request('https://official-joke-api.appspot.com/jokes/general/random', 'json'))[0]
+            joke = randchoice(await aiohttp_request('https://raw.githubusercontent.com/15Dkatz/official_joke_api/master/jokes/index.json', 'text-json'))
             await ctx.send(f"{joke['setup']} {joke['punchline']}")
         except Exception as e:
             print(format_exc())
