@@ -24,27 +24,30 @@ class Mod(Cog):
         if not ctx.guild.me.guild_permissions.manage_nicknames: return await ctx.send(f"I need '`Manage Nicknames`' permission to change other people's nicknames.")
         await ctx.message.add_reaction(loading_msg(emoji=True))
         
-        dict_ = {}
-        def filter_(m):
-            return m.nick and m != self.bot.user
-        for m in filter(filter_, ctx.guild.members):
-            dict_[str(m.id)] = m.nick
+        nicknames = {}
         for m in ctx.guild.members:
             if m != self.bot.user:
-                try: await m.edit(nick=name.get('text', (await aiohttp_request('https://randomuser.me/api/', 'json'))['results'][0]['name']['first']))
-                except: pass
-        await ctx.send(f"Command complete. To reset all the nicknames, copy and paste everything below:\n{ctx.prefix}massunnick" + f"\n```json\n{fson(dict_)}\n```" if dict_ else "")
+                try:
+                    previous = m.nick
+                    await m.edit(nick=name.get('text', (await aiohttp_request('https://randomuser.me/api/', 'json'))['results'][0]['name']['first']))
+                    if previous: nicknames[str(m.id)] = previous
+                except:
+                    pass
+        await ctx.send(f"{ctx.author.mention} Command complete. To reset all the nicknames, copy and paste everything below:\n{ctx.prefix}massunnick" + f"\n```json\n{fson(nicknames)}\n```" if nicknames else "")
         await ctx.message.remove_reaction(loading_msg(emoji=True), ctx.guild.me)
         await ctx.message.add_reaction(self.bot.get_emoji(663230689860386846))
     
     @command(brief="Reset nicknames performed by massnick command.", description="If no JSON is provided, everyone's nickname will be removed.")
-    async def massunnick(self, ctx, *, nicks:opts=None):
-        if nicks and nicks.get('server') and ctx.author.id in access_ids: ctx.guild = self.bot.get_guild(int(nicks['server']))
-        if not ctx.author.guild_permissions.manage_nicknames and not ctx.author.id in access_ids: return await ctx.send(f"You require '`Manage Nicknames`' permission to use this command {ctx.author.mention}.")
-        if not ctx.guild.me.guild_permissions.manage_nicknames: return await ctx.send("I require '`Manage Nicknames`' permission to change other people's nicknames.")
+    async def massunnick(self, ctx, *, nicks: opts=None):
+        if nicks and nicks.get('server') and ctx.author.id in access_ids:
+            ctx.guild = self.bot.get_guild(int(nicks['server']))
+        if not ctx.author.guild_permissions.manage_nicknames and not ctx.author.id in access_ids:
+            return await ctx.send(f"You require '`Manage Nicknames`' permission to use this command {ctx.author.mention}.")
+        if not ctx.guild.me.guild_permissions.manage_nicknames:
+            return await ctx.send("I require '`Manage Nicknames`' permission to change other people's nicknames.")
 
         await ctx.message.add_reaction(loading_msg(emoji=True))
-        if (nicks := nicks.get('text')) and (find := re_search(r"```(?:json|.*)\n*\s*(\{(.|\n)+\})\s*\n*\s*```\s*\n*$|(\{(.|\n)+\})", nicks)):
+        if nicks and (find := re_search(r"```(?:json|.*)\n*\s*(\{(.|\n)+\})\s*\n*\s*```\s*\n*$|(\{(.|\n)+\})", nicks)):
             try:
                 nicks = json_loads(find.groups()[0])
             except:
@@ -55,8 +58,9 @@ class Mod(Cog):
                     return await ctx.message.remove_reaction(loading_msg(emoji=True), ctx.guild.me)
         else: nicks = {}
         for m in ctx.guild.members:
-            try: await m.edit(nick=nicks.get(str(m.id)))
-            except: pass
+            if m.nick:
+                try: await m.edit(nick=nicks.get(str(m.id), m.name))
+                except: pass
         await ctx.message.remove_reaction(loading_msg(emoji=True), ctx.guild.me)
         await ctx.message.add_reaction(self.bot.get_emoji(663230689860386846))
 

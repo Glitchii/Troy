@@ -268,29 +268,29 @@ class Misc(commands.Cog):
     async def translate(self, ctx, to, *, text=''):
         try:
             tra = Translator().translate(text, dest=to)
-            await ctx.send(embed=Embed(color=Colour.lighter_grey(), description=None)
-                .add_field(name=f"<:Right:663400557154795528> From {tra.src}",value=text, inline=True)
-                .add_field(name=f"<:Left:663400555493851182> To {to}",value=tra.text, inline=False)
+            await ctx.send(embed=Embed(color=Colour.lighter_grey(), description='Translation')
+                .add_field(name=f"<:Right:663400557154795528> From {tra.src.upper()}", value=text, inline=True)
+                .add_field(name=f"<:Left:663400555493851182> To {to}", value=re_sub(r'(<a?:) (\w+:) (\d{18}>)', r'\1\2\3', tra.text), inline=False)
                 .set_footer(text=f"Requested by {ctx.author.display_name}", icon_url=ctx.author.avatar_url)
                 .set_thumbnail(url="https://i.imgur.com/wmpg9F5.png"))
-        except Exception as ext1:
+        except Exception as er:
             print(format_exc())
-            return await ctx.send("There is currently a problem with a certain google translate library which this command relies on. Command will be fixed as soon as that is.")
-            await ctx.send(embed=Embed(color=Colour.red(), description=f"❗{ext1}")
-                .set_footer(text="You probably used discord emojis eg :smile: OR didn't put a destination language to translate to"))
+            await ctx.send(f"Error - {er}")
     
     @commands.command(aliases=("det",), description="Detects a language text is in")
     async def detect(self, ctx, *, text):
         try:
             detected = Translator().detect(text)
-            await ctx.send(embed=Embed(color=Colour.lighter_grey(),
-                description=f"Language: {detected.lang}, Confidence: {detected.confidence}")
+            description = f"Language detected: {detected.lang.upper()}"
+            if detected.confidence:
+                description += f"\nConfidence: {detected.confidence}"
+
+            await ctx.send(embed=Embed(color=Colour.lighter_grey(), description=description)
                 .set_author(name=ctx.author.name, icon_url=ctx.author.avatar_url)
                 .set_author(name="Detected", icon_url="https://i.imgur.com/wmpg9F5.png"))
-        except Exception as ex2:
+        except Exception as er:
             print(format_exc())
-            return await ctx.send("There is currently a problem with a certain google translate library which this command relies on. Command will be fixed as soon as that is.")
-            await ctx.send(embed=Embed(color=Colour.red(), title="❗Error", description=f"{ex2}"))
+            await ctx.reply(f"Error - {er}")
     
     @commands.command()
     async def reverse(self, ctx, *, Text=None, image=None):
