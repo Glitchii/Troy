@@ -1,6 +1,7 @@
 test*
 TODO
 .env
+!.env
 .venv/
 .vscode/
 __pycache__/

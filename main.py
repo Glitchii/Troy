@@ -16,7 +16,7 @@ from discord.utils import get, escape_mentions
 from imports import (
     custom_cmd_helper, fson, svCmds, bot, botPrefixDB, colrs,
     Cmds, access_ids, tkn, send_me, get_fun_fact, lineNum,
-    guildPrefix, loading_msg, greetings, tryInt, customCmdsDB,
+    guildPrefix, loading_msg, greetings, tryInt, customCmdsDB, paginate,
     custom_cmd_format, modLogsDB, aiohttp_request, join_leave_formatters,
     successful, ExitRequest
 )
@@ -793,17 +793,6 @@ async def run(ctx, *, code=None):
     if ctx.author.id in access_ids and ctx.invoked_with == 'eval':
         stdout, env = IoStringIO(), {'ctx': ctx, 'bot': bot}
         env.update(globals())
-
-        def paginate(text):
-            last, pages = 0, []
-            for curr in range(len(text)):
-                if curr % 1980 == 0:
-                    pages.append(text[last:curr])
-                    last = curr
-                    appd_index = curr
-            if appd_index != len(text) - 1:
-                pages.append(text[last:curr])
-            return tuple(filter(lambda a: a != '', pages))
 
         try:
             exec(f'''async def func():\n{indent(chr(10).join(code.split(chr(10))[1:-1]) if code.startswith('```') and code.endswith('```') else code, "  ")}''', env)

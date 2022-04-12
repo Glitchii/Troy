@@ -15,7 +15,7 @@ from discord import (
 )
 from imports import (
     access_ids, colrs, botPrefixDB,
-    lineNum, Cmds, loading_msg,
+    lineNum, Cmds, loading_msg, paginate,
     aiohttp_request, tryInt, tstGuild, dblpy
 )
 
@@ -229,11 +229,21 @@ class Server(Cog):
                 await ctx.send(e)
 
     @server.command(hidden=True, name="list", description="See all the servers I'm in")
-    async def serverList(self, ctx):
-        if ctx.author.id not in access_ids: return # Not allowed to everyone if adding bot to top.gg
-        await ctx.send(embed=Embed(title="All servers I'm powering:", description="```\n" + ', '.join(map(str, self.bot.guilds)) + "```", colour=0x0af78a)
-            .add_field(name=f"<:Server:663296208537911347> {len(self.bot.guilds)} Servers", value="[Remove yours](https://i.imgur.com/I4tUSRF.png)", inline=True)
-            .add_field(name=f"<:Users:663295067280244776> {len(set(self.bot.get_all_members()))} users", value=f"[Invite me](https://discordapp.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions=1479928959)", inline=True))
+    async def serverList(self, ctx, more = False):
+        if ctx.author.id not in access_ids: return
+        if not more:
+            return await ctx.send(embed=Embed(title="All servers I'm powering:", description="```\n" + ', '.join(map(str, self.bot.guilds)) + "```", colour=0x0af78a)
+                .add_field(name=f"<:Server:663296208537911347> {len(self.bot.guilds)} Servers", value="[Remove yours](https://i.imgur.com/I4tUSRF.png)", inline=True)
+                .add_field(name=f"<:Users:663295067280244776> {len(set(self.bot.get_all_members()))} users", value=f"[Invite me](https://discordapp.com/oauth2/authorize?client_id={self.bot.user.id}&scope=bot&permissions=1479928959)", inline=True))
+        
+        clean, text = lambda t: re_sub(r'[\*_`]', '', str(t)), ''
+        for i, guild in enumerate(sorted([x for x in self.bot.guilds], key=lambda g: g.me.joined_at)):
+            text += ( f"{i}  {clean(guild.name)} ({guild.id})\n"
+                      f"{''*9} Owner: {clean(guild.owner)} ({guild.owner.mention})\n"
+                      f"{''*9} Humans: {len([m for m in guild.members if not m.bot])}. Bots: {len([m for m in guild.members if m.bot])}\n")
+                      
+        for text in paginate(text):
+            await ctx.send(text)
 
     @group(invoke_without_command=True, aliases=("who",), description="See number of messages, avatar, permision, information about a server member and more")
     async def user(self, ctx): await ctx.send(embed=Embed(

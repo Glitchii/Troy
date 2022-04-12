@@ -12,11 +12,11 @@ from pymongo import MongoClient
 from discord import Embed, Color, Intents
 from discord.ext.commands import Bot
 from discord.utils import escape_mentions
-from dotenv import load_dotenv
-load_dotenv()
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv('test.env') or find_dotenv())
 
 tkn, mongoURI, dblTkn, wolframID = (
-    env.get('testToken', env['token']),
+    env.get('token', env['testToken']),
     env['mongoURI'],
     env['dblToken'],
     env['wolframID']
@@ -71,7 +71,7 @@ dblpy = DBLClient(bot, dblTkn, autopost=True)
 
 bot_owner = lambda: bot.get_user(642791754160013312)
 send_me = lambda: bot.get_channel(int(env['logChannel'])) or bot_owner()
-tstGuild = lambda guild1 = True: bot.get_guild(int(env['gID']) if guild1 else int(env['gID1']))
+tstGuild = lambda guild1 = True: bot.get_guild(int(env['testGuildID']) if guild1 else int(env['testGuildID2']))
 loading_msg = lambda customMsg = None, alone = False, emoji = False: ("<a:Preloader:663234181219745813>" if alone else "Loading... <a:Preloader:663234181219745813>" if not customMsg else f"{customMsg} <a:Preloader:663234181219745813>") if not emoji else bot.get_emoji(663234181219745813)
 
 async def aiohttp_request(URL, Type = None, params = None, get = True, data = {}, headers = {}, timeout = None):
@@ -101,6 +101,17 @@ def lineNum(sayText = True):
 def tryInt(arg):
     try: return int(arg)
     except: return False
+
+def paginate(text):
+    last, pages = 0, []
+    for curr in range(len(text)):
+        if curr % 1980 == 0:
+            pages.append(text[last:curr])
+            last = curr
+            appd_index = curr
+    if appd_index != len(text) - 1:
+        pages.append(text[last:curr])
+    return tuple(filter(lambda a: a != '', pages))
 
 def sendingTo(ctx, id):
     try:
